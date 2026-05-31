@@ -160,6 +160,26 @@ If `cacheStatus.status` is `refreshing`, wait a few seconds and rerun. The final
 
 ## Current Baseline
 
+As of 2026-05-31, upgrading the local install from OpenClaw `2026.5.22`
+to `2026.5.28` did not need the local hotfix reapplied. The upstream
+code shape changed enough that the old minified string checks no longer
+matched, but behavior checks passed after `openclaw gateway restart`.
+
+Known-good backend result for `long` on `2026-05-28` after that upgrade:
+
+```text
+OpenClaw CLI version: 2026.5.28
+OpenClaw Gateway version: 2026.5.28
+usage.cost totalTokens: 1402020
+usage.cost totalCost: 2.7405108
+usage.cost cacheStatus.status: fresh
+sessions.usage totals.totalTokens: 1402020
+sessions.usage cacheStatus.status: fresh
+```
+
+Conclusion: no patch was needed for `2026.5.28`; behavior checks are the
+source of truth when source string checks fail because upstream changed.
+
 As of 2026-05-28, the local hotfix produced this known-good backend result for `long` on `2026-05-28`:
 
 ```text
