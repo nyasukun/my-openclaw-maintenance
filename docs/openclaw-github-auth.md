@@ -126,7 +126,7 @@ command -v gh
 gh auth status
 env | grep -E '^(GH_TOKEN|GITHUB_TOKEN|BASH_ENV|HOME)=' | sed -E 's/(GH_TOKEN|GITHUB_TOKEN)=.*/\1=present/'
 ls -l "$HOME/.config/gh/hosts.yml" "$HOME/.git-credentials" "$HOME/.gitconfig" 2>&1
-cd /workspace/azabu.io && git config --global --list && git status -sb && git ls-remote origin HEAD
+cd /workspace/<repo> && git config --global --list && git status -sb && git ls-remote origin HEAD
 ```
 
 Avoid printing raw tokens. `gh auth status` may print a masked token, but do not
@@ -135,12 +135,7 @@ paste unredacted `hosts.yml`, `.git-credentials`, `.env`, or `local.json`.
 ## PR Workflow Note
 
 If `git push` is blocked but the Codex GitHub connector is available, it can
-create Git objects and open a PR without relying on sandbox `gh` auth. That was
-used to create:
-
-```text
-https://github.com/nyasukun/azabu.io/pull/17
-```
+create Git objects and open a PR without relying on sandbox `gh` auth.
 
 If a branch later shows:
 
