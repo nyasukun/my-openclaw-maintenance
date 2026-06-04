@@ -37,3 +37,9 @@ Use the openclaw-upgrade-regression skill to check my OpenClaw upgrade.
 ## Notes
 
 Do not commit secrets from `/home/yasu/.openclaw/openclaw.json` or session logs.
+
+Operational notes:
+
+- [OpenClaw GitHub authentication](docs/openclaw-github-auth.md): lessons from
+  wiring `gh` and `git` credentials into Docker sandboxes where
+  `sandbox_exec` runs with `HOME=/workspace`.
