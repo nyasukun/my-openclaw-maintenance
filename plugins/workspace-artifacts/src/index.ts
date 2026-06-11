@@ -351,11 +351,64 @@ function renderAppHtml(root: string): string {
     .previewbody iframe { width: 100%; min-height: calc(100vh - 118px); border: 1px solid var(--line); background: white; }
     .empty { color: var(--muted); display: grid; place-items: center; height: 100%; }
     .error { color: var(--danger); }
+    .mobile-switcher { display: none; }
     @media (max-width: 900px) {
-      header { grid-template-columns: 1fr; }
-      .toolbar { justify-content: start; }
-      main { grid-template-columns: 1fr; grid-template-rows: 34vh 42vh 42vh; }
-      aside, section { border-right: 0; border-bottom: 1px solid var(--line); }
+      body { height: 100vh; overflow: hidden; }
+      .app { height: 100vh; min-height: 100vh; grid-template-rows: auto 1fr; }
+      header { grid-template-columns: 1fr; gap: 8px; padding: 10px 12px; }
+      .title strong { font-size: 14px; }
+      .title span { font-size: 12px; }
+      .toolbar { display: none; }
+      main { position: relative; display: block; min-height: 0; overflow: hidden; }
+      aside, section { position: absolute; inset: 0; display: none; border: 0; min-height: 0; }
+      body[data-mobile-view="files"] aside,
+      body[data-mobile-view="edit"] .editor,
+      body[data-mobile-view="preview"] .preview { display: grid; }
+      aside { grid-template-rows: auto 1fr; }
+      .editor { grid-template-rows: auto 1fr auto; }
+      .preview { grid-template-rows: auto 1fr; }
+      .pathbar, .filebar { padding: 10px; }
+      textarea { padding: 12px; font-size: 12px; }
+      .preview h2 { padding: 10px 12px; }
+      .previewbody { padding: 0; }
+      .previewbody iframe { width: 100%; height: 100%; min-height: 0; border: 0; display: block; }
+      .previewbody img { width: 100%; min-height: 100%; object-fit: contain; background: var(--panel); }
+      .previewbody pre { padding: 12px; }
+      .mobile-switcher {
+        position: fixed;
+        right: 14px;
+        bottom: calc(14px + env(safe-area-inset-bottom));
+        z-index: 20;
+        display: grid;
+        justify-items: end;
+        gap: 8px;
+      }
+      .mobile-actions {
+        display: grid;
+        gap: 8px;
+        justify-items: end;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(8px);
+        transition: opacity .16s ease, transform .16s ease;
+      }
+      .mobile-switcher:hover .mobile-actions,
+      .mobile-switcher:focus-within .mobile-actions,
+      .mobile-switcher.open .mobile-actions {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0);
+      }
+      .mobile-actions button,
+      #mobileMenu {
+        min-width: 48px;
+        min-height: 48px;
+        border-radius: 999px;
+        box-shadow: 0 8px 24px rgba(0,0,0,.24);
+      }
+      .mobile-actions button { padding: 0 14px; background: var(--panel); }
+      .mobile-actions button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+      #mobileMenu { width: 56px; height: 56px; padding: 0; background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
     }
   </style>
 </head>
@@ -385,13 +438,32 @@ function renderAppHtml(root: string): string {
         <div id="preview" class="previewbody"><div class="empty">Open a file</div></div>
       </section>
     </main>
+    <div class="mobile-switcher" id="mobileSwitcher">
+      <div class="mobile-actions" aria-label="Mobile view switcher">
+        <button id="mobileFiles" type="button">Files</button>
+        <button id="mobileEdit" type="button">Edit</button>
+        <button id="mobilePreview" type="button">Preview</button>
+        <button id="mobileSave" type="button" class="primary">Save</button>
+      </div>
+      <button id="mobileMenu" type="button" aria-label="Switch view">View</button>
+    </div>
   </div>
   <script>
     const api = ${JSON.stringify(ROUTE_PREFIX)};
-    const state = { dir: "", file: "", fileType: "text", dirty: false };
+    const state = { dir: "", file: "", fileType: "text", dirty: false, mobileView: "files" };
     const initialFile = new URLSearchParams(window.location.search).get("file") || "";
     const qs = (id) => document.getElementById(id);
     const status = (text, error = false) => { const el = qs("status"); el.textContent = text; el.className = error ? "status error" : "status"; };
+
+    function setMobileView(view) {
+      state.mobileView = view;
+      document.body.dataset.mobileView = view;
+      for (const id of ["mobileFiles", "mobileEdit", "mobilePreview"]) qs(id).classList.remove("active");
+      if (view === "files") qs("mobileFiles").classList.add("active");
+      if (view === "edit") qs("mobileEdit").classList.add("active");
+      if (view === "preview") qs("mobilePreview").classList.add("active");
+      qs("mobileSwitcher").classList.remove("open");
+    }
 
     async function requestJson(url, options) {
       const res = await fetch(url, options);
@@ -440,6 +512,7 @@ function renderAppHtml(root: string): string {
       renderPreview(data);
       status(data.type === "text" ? "Opened " + data.path : "Preview only: " + data.path);
       await loadTree(parentDir(data.path));
+      setMobileView(data.type !== "text" || data.path.endsWith(".html") || data.path.endsWith(".htm") ? "preview" : "edit");
     }
 
     function renderPreview(data) {
@@ -495,6 +568,11 @@ function renderAppHtml(root: string): string {
     qs("openDir").onclick = () => loadTree(qs("dirPath").value);
     qs("refresh").onclick = () => loadTree(state.dir).catch((err) => status(err.message, true));
     qs("save").onclick = () => saveFile().catch((err) => status(err.message, true));
+    qs("mobileSave").onclick = () => saveFile().catch((err) => status(err.message, true));
+    qs("mobileFiles").onclick = () => setMobileView("files");
+    qs("mobileEdit").onclick = () => setMobileView("edit");
+    qs("mobilePreview").onclick = () => setMobileView("preview");
+    qs("mobileMenu").onclick = () => qs("mobileSwitcher").classList.toggle("open");
     qs("newFile").onclick = () => {
       const name = prompt("Path");
       if (!name) return;
@@ -506,6 +584,7 @@ function renderAppHtml(root: string): string {
       qs("editor").value = "";
       updateTextPreview();
       status("New file");
+      setMobileView("edit");
     };
     qs("newDir").onclick = async () => {
       const name = prompt("Path");
@@ -523,6 +602,7 @@ function renderAppHtml(root: string): string {
       event.preventDefault();
       event.returnValue = "";
     });
+    setMobileView(initialFile ? "preview" : "files");
     (initialFile ? openFile(initialFile) : loadTree("")).catch((err) => status(err.message, true));
   </script>
 </body>
