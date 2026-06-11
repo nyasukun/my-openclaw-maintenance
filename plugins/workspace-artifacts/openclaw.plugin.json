@@ -1,0 +1,19 @@
+{
+  "id": "workspace-artifacts",
+  "name": "Workspace Artifacts",
+  "description": "Browse, preview, and edit OpenClaw workspace files from the authenticated Gateway.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "rootPath": {
+        "type": "string",
+        "description": "Optional workspace root override. Defaults to the configured OpenClaw workspace."
+      }
+    }
+  },
+  "activation": {
+    "onStartup": true
+  }
+}

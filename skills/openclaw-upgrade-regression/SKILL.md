@@ -1,21 +1,21 @@
 ---
 name: openclaw-upgrade-regression
-description: Use from local Codex, outside OpenClaw, after upgrading OpenClaw on yasu@192.168.86.103 to check for regressions and reapply the guarded usage-page hotfix only when needed.
+description: Use from local Codex, outside OpenClaw, after upgrading a target OpenClaw host to check for regressions and reapply the guarded usage-page hotfix only when needed.
 metadata:
   short-description: Check and repair OpenClaw upgrade regressions
 ---
 
 # OpenClaw Upgrade Regression
 
-Use this from local Codex after any OpenClaw upgrade or reinstall on `yasu@192.168.86.103`. This is not an OpenClaw agent skill; do not add it to OpenClaw's agent skill allowlist.
+Use this from local Codex after any OpenClaw upgrade or reinstall on a target host. Set `OPENCLAW_TARGET` to the SSH target, for example `user@host`. This is not an OpenClaw agent skill; do not add it to OpenClaw's agent skill allowlist.
 
 Goal: connect over SSH, detect whether upstream OpenClaw already preserves the local fixes, and only patch installed OpenClaw files when behavior regressed and the known code shape is still present.
 
 ## Safety Rules
 
-- Run checks from local Codex with `ssh yasu@192.168.86.103 '...'`; avoid an interactive SSH shell unless necessary.
-- Do not print or copy secrets from remote `/home/yasu/.openclaw/openclaw.json`.
-- Back up every file before editing under `/home/yasu/.npm-global/lib/node_modules/openclaw/dist`.
+- Run checks from local Codex with `ssh "$OPENCLAW_TARGET" '...'`; avoid an interactive SSH shell unless necessary.
+- Do not print or copy secrets from remote `~/.openclaw/openclaw.json`.
+- Back up every file before editing under the remote OpenClaw npm install directory.
 - Prefer behavior checks over string checks. If upstream is fixed, report "no patch needed".
 - If code patterns do not match, stop and report that OpenClaw changed; do not force a blind patch.
 - After any patch, run syntax checks, restart the gateway, and verify RPC output.
@@ -38,17 +38,17 @@ Expected fixed behavior:
 Run these from local Codex:
 
 ```bash
-ssh yasu@192.168.86.103 'openclaw --version'
-ssh yasu@192.168.86.103 'openclaw gateway status'
-ssh yasu@192.168.86.103 'openclaw sessions --agent long --json --limit 20 | jq "[.. | objects | select((.totalTokens? // 0) > 0)] | length"'
+ssh "$OPENCLAW_TARGET" 'openclaw --version'
+ssh "$OPENCLAW_TARGET" 'openclaw gateway status'
+ssh "$OPENCLAW_TARGET" 'openclaw sessions --agent long --json --limit 20 | jq "[.. | objects | select((.totalTokens? // 0) > 0)] | length"'
 ```
 
 Pick a date with known `long` usage, usually today or the latest `updatedAt` date from `openclaw sessions --agent long`.
 
 ```bash
 DATE=2026-05-28
-ssh yasu@192.168.86.103 "openclaw gateway call sessions.usage --json --params '{\"agentId\":\"long\",\"startDate\":\"$DATE\",\"endDate\":\"$DATE\",\"limit\":1000,\"includeContextWeight\":true}' | jq '{sessions:(.sessions|length), totals:.totals, cacheStatus:.cacheStatus}'"
-ssh yasu@192.168.86.103 "openclaw gateway call usage.cost --json --params '{\"agentId\":\"long\",\"startDate\":\"$DATE\",\"endDate\":\"$DATE\"}' | jq '{daily, totals, cacheStatus}'"
+ssh "$OPENCLAW_TARGET" "openclaw gateway call sessions.usage --json --params '{\"agentId\":\"long\",\"startDate\":\"$DATE\",\"endDate\":\"$DATE\",\"limit\":1000,\"includeContextWeight\":true}' | jq '{sessions:(.sessions|length), totals:.totals, cacheStatus:.cacheStatus}'"
+ssh "$OPENCLAW_TARGET" "openclaw gateway call usage.cost --json --params '{\"agentId\":\"long\",\"startDate\":\"$DATE\",\"endDate\":\"$DATE\"}' | jq '{daily, totals, cacheStatus}'"
 ```
 
 Interpretation:
@@ -62,9 +62,9 @@ Interpretation:
 Important files:
 
 ```text
-/home/yasu/.npm-global/lib/node_modules/openclaw/dist/server-methods-*.js
-/home/yasu/.npm-global/lib/node_modules/openclaw/dist/control-ui/index.html
-/home/yasu/.npm-global/lib/node_modules/openclaw/dist/control-ui/assets/index-*.js
+${OPENCLAW_NPM_GLOBAL:-~/.npm-global}/lib/node_modules/openclaw/dist/server-methods-*.js
+${OPENCLAW_NPM_GLOBAL:-~/.npm-global}/lib/node_modules/openclaw/dist/control-ui/index.html
+${OPENCLAW_NPM_GLOBAL:-~/.npm-global}/lib/node_modules/openclaw/dist/control-ui/assets/index-*.js
 ```
 
 Server-side requirements:
@@ -82,9 +82,9 @@ UI requirements:
 Useful grep checks:
 
 ```bash
-ssh yasu@192.168.86.103 'grep -RIn "\"usage.cost\": async" /home/yasu/.npm-global/lib/node_modules/openclaw/dist/server-methods-*.js'
-ssh yasu@192.168.86.103 'grep -RIn "agentId:ZS(e).*sessions.usage\\|sessions.usage.*agentId:ZS(e)" /home/yasu/.npm-global/lib/node_modules/openclaw/dist/control-ui/assets/index-*.js'
-ssh yasu@192.168.86.103 'grep -RIn "agentId:ZS(e).*usage.cost\\|usage.cost.*agentId:ZS(e)" /home/yasu/.npm-global/lib/node_modules/openclaw/dist/control-ui/assets/index-*.js'
+ssh "$OPENCLAW_TARGET" 'grep -RIn "\"usage.cost\": async" "${OPENCLAW_NPM_GLOBAL:-$HOME/.npm-global}"/lib/node_modules/openclaw/dist/server-methods-*.js'
+ssh "$OPENCLAW_TARGET" 'grep -RIn "agentId:ZS(e).*sessions.usage\\|sessions.usage.*agentId:ZS(e)" "${OPENCLAW_NPM_GLOBAL:-$HOME/.npm-global}"/lib/node_modules/openclaw/dist/control-ui/assets/index-*.js'
+ssh "$OPENCLAW_TARGET" 'grep -RIn "agentId:ZS(e).*usage.cost\\|usage.cost.*agentId:ZS(e)" "${OPENCLAW_NPM_GLOBAL:-$HOME/.npm-global}"/lib/node_modules/openclaw/dist/control-ui/assets/index-*.js'
 ```
 
 ## Patch Procedure
@@ -94,13 +94,14 @@ Only continue if the behavior check fails and source checks show the old code sh
 1. Create a timestamped backup:
 
 ```bash
-ssh yasu@192.168.86.103 'set -e
+ssh "$OPENCLAW_TARGET" 'set -e
 TS=$(date +%Y%m%d%H%M%S)
-BACKUP=/home/yasu/.openclaw/codex-backups/usage-ui-hotfix-$TS
+OPENCLAW_NPM_GLOBAL=${OPENCLAW_NPM_GLOBAL:-$HOME/.npm-global}
+BACKUP=$HOME/.openclaw/codex-backups/usage-ui-hotfix-$TS
 mkdir -p "$BACKUP"
-cp /home/yasu/.npm-global/lib/node_modules/openclaw/dist/server-methods-*.js "$BACKUP"/
-cp /home/yasu/.npm-global/lib/node_modules/openclaw/dist/control-ui/index.html "$BACKUP"/
-cp /home/yasu/.npm-global/lib/node_modules/openclaw/dist/control-ui/assets/index-*.js "$BACKUP"/
+cp "$OPENCLAW_NPM_GLOBAL"/lib/node_modules/openclaw/dist/server-methods-*.js "$BACKUP"/
+cp "$OPENCLAW_NPM_GLOBAL"/lib/node_modules/openclaw/dist/control-ui/index.html "$BACKUP"/
+cp "$OPENCLAW_NPM_GLOBAL"/lib/node_modules/openclaw/dist/control-ui/assets/index-*.js "$BACKUP"/
 printf "backup=%s\n" "$BACKUP"'
 ```
 
@@ -142,18 +143,18 @@ Then update `control-ui/index.html` to load that new asset.
 4. Validate and restart:
 
 ```bash
-ssh yasu@192.168.86.103 'node --check /home/yasu/.npm-global/lib/node_modules/openclaw/dist/server-methods-*.js'
-ssh yasu@192.168.86.103 'node --check /home/yasu/.npm-global/lib/node_modules/openclaw/dist/control-ui/assets/index-*.codex-usage-agentid.js'
-ssh yasu@192.168.86.103 'openclaw gateway restart'
-ssh yasu@192.168.86.103 'systemctl --user is-active openclaw-gateway.service'
+ssh "$OPENCLAW_TARGET" 'node --check "${OPENCLAW_NPM_GLOBAL:-$HOME/.npm-global}"/lib/node_modules/openclaw/dist/server-methods-*.js'
+ssh "$OPENCLAW_TARGET" 'node --check "${OPENCLAW_NPM_GLOBAL:-$HOME/.npm-global}"/lib/node_modules/openclaw/dist/control-ui/assets/index-*.codex-usage-agentid.js'
+ssh "$OPENCLAW_TARGET" 'openclaw gateway restart'
+ssh "$OPENCLAW_TARGET" 'systemctl --user is-active openclaw-gateway.service'
 ```
 
 5. Verify behavior:
 
 ```bash
 DATE=2026-05-28
-ssh yasu@192.168.86.103 "openclaw gateway call usage.cost --json --params '{\"agentId\":\"long\",\"startDate\":\"$DATE\",\"endDate\":\"$DATE\"}' | jq '{daily, totals, cacheStatus}'"
-ssh yasu@192.168.86.103 'curl -sS http://127.0.0.1:18789/ | grep "codex-usage-agentid" || true'
+ssh "$OPENCLAW_TARGET" "openclaw gateway call usage.cost --json --params '{\"agentId\":\"long\",\"startDate\":\"$DATE\",\"endDate\":\"$DATE\"}' | jq '{daily, totals, cacheStatus}'"
+ssh "$OPENCLAW_TARGET" 'curl -sS http://127.0.0.1:18789/ | grep "codex-usage-agentid" || true'
 ```
 
 If `cacheStatus.status` is `refreshing`, wait a few seconds and rerun. The final expected status is `fresh` with nonzero totals for dates where `long` has usage.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workspace Artifact Builder"
+  short_description: "Create previewable workspace artifacts"
+  default_prompt: "Use $workspace-artifact-builder to create a previewable web artifact in the workspace."
