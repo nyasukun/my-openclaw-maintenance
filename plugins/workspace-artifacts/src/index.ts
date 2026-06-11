@@ -353,27 +353,28 @@ function renderAppHtml(root: string): string {
     .error { color: var(--danger); }
     .mobile-switcher { display: none; }
     @media (max-width: 900px) {
-      body { height: 100vh; overflow: hidden; }
-      .app { height: 100vh; min-height: 100vh; grid-template-rows: auto 1fr; }
-      body[data-mobile-view="preview"] .app { grid-template-rows: 1fr; }
+      body { height: 100vh; height: 100dvh; overflow: hidden; }
+      .app { height: 100vh; height: 100dvh; min-height: 100vh; min-height: 100dvh; grid-template-rows: auto minmax(0, 1fr); }
+      body[data-mobile-view="preview"] .app { grid-template-rows: minmax(0, 1fr); }
       body[data-mobile-view="preview"] header { display: none; }
       header { grid-template-columns: 1fr; gap: 8px; padding: 10px 12px; }
       .title strong { font-size: 14px; }
       .title span { font-size: 12px; }
       .toolbar { display: none; }
-      main { position: relative; display: block; min-height: 0; overflow: hidden; }
-      aside, section { position: absolute; inset: 0; z-index: 0; display: none !important; border: 0; min-height: 0; }
+      main { position: relative; display: block; height: 100%; min-height: 0; overflow: hidden; }
+      aside, section { position: absolute; inset: 0; z-index: 0; display: none !important; height: 100%; border: 0; min-height: 0; }
       aside.mobile-active,
       section.mobile-active { z-index: 1; display: grid !important; }
       aside { grid-template-rows: auto 1fr; }
       .editor { grid-template-rows: auto 1fr auto; }
       .preview { grid-template-rows: auto 1fr; }
+      body[data-mobile-view="preview"] .preview { grid-template-rows: minmax(0, 1fr); }
       .pathbar, .filebar { padding: 10px; }
       textarea { padding: 12px; font-size: 12px; }
       .preview h2 { padding: 10px 12px; }
       body[data-mobile-view="preview"] .preview h2 { display: none; }
-      .previewbody { padding: 0; }
-      .previewbody iframe { width: 100%; height: 100%; min-height: 0; border: 0; display: block; }
+      .previewbody { min-height: 0; height: 100%; padding: 0; overflow: hidden; }
+      .previewbody iframe { width: 100%; height: 100%; min-height: 100%; border: 0; display: block; }
       .previewbody img { width: 100%; min-height: 100%; object-fit: contain; background: var(--panel); }
       .previewbody pre { padding: 12px; }
       .mobile-switcher {
