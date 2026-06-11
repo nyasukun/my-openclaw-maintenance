@@ -61,7 +61,23 @@ Set `type` to:
 5. Write or update `artifact.json`.
 6. For `type: "web"`, mirror the runnable files to `canvas/<artifact-id>/`.
 7. Validate that the entry file exists.
-8. Return a concise summary and preview URLs.
+8. Run the quality checks below and revise obvious problems before responding.
+9. Return a concise summary and preview URLs.
+
+## Quality Checks
+
+Treat artifacts as user-visible deliverables, not rough code snippets.
+
+For web artifacts:
+
+- Do one explicit self-review pass after writing the first version.
+- Check desktop and phone layouts in the code. Text, buttons, images, and animation layers must not overlap incoherently.
+- Use stable responsive sizing for fixed-format surfaces such as stages, panels, grids, and controls.
+- For animation artifacts, verify the animation has a clear beginning, middle, and end; avoid a single static scene with superficial motion.
+- Include reduced-motion handling or a non-animated fallback when practical.
+- Prefer real provided assets for brand/product/logo work. Do not approximate a provided logo with generic shapes when the asset is available.
+- If browser, screenshot, or DOM tooling is available, preview the entry file before responding and fix visible issues. If visual preview is not available, inspect the HTML/CSS/JS manually and avoid claiming visual verification.
+- Before final response, ensure the canvas mirror contains every runtime file referenced by the entry file.
 
 ## Web Artifacts
 
