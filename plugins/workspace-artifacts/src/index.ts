@@ -355,6 +355,8 @@ function renderAppHtml(root: string): string {
     @media (max-width: 900px) {
       body { height: 100vh; overflow: hidden; }
       .app { height: 100vh; min-height: 100vh; grid-template-rows: auto 1fr; }
+      body[data-mobile-view="preview"] .app { grid-template-rows: 1fr; }
+      body[data-mobile-view="preview"] header { display: none; }
       header { grid-template-columns: 1fr; gap: 8px; padding: 10px 12px; }
       .title strong { font-size: 14px; }
       .title span { font-size: 12px; }
@@ -369,6 +371,7 @@ function renderAppHtml(root: string): string {
       .pathbar, .filebar { padding: 10px; }
       textarea { padding: 12px; font-size: 12px; }
       .preview h2 { padding: 10px 12px; }
+      body[data-mobile-view="preview"] .preview h2 { display: none; }
       .previewbody { padding: 0; }
       .previewbody iframe { width: 100%; height: 100%; min-height: 0; border: 0; display: block; }
       .previewbody img { width: 100%; min-height: 100%; object-fit: contain; background: var(--panel); }
