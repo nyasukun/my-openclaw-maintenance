@@ -65,3 +65,6 @@ Operational notes:
 - [OpenClaw GitHub authentication](docs/openclaw-github-auth.md): lessons from
   wiring `gh` and `git` credentials into Docker sandboxes where
   `sandbox_exec` runs with `HOME=/workspace`.
+- [OpenClaw skill deployment](docs/openclaw-skill-deployment.md): keep public
+  skill sources generic, then inject the current Tailscale Serve URL only into
+  the deployed OpenClaw-managed skill copy.
