@@ -77,11 +77,11 @@ Mirror these files from `artifacts/<artifact-id>/` to `canvas/<artifact-id>/`:
 
 Do not mirror `artifact.json` unless it is intentionally part of the artifact runtime.
 
-Always provide both preview URLs:
+Always provide both preview URLs as tap-friendly Markdown links with the URL repeated after the link. Chat channels such as Telegram and Slack should receive a clickable label when Markdown is rendered, while still exposing the raw URL when Markdown is not rendered.
 
 ```text
-Local: http://127.0.0.1:<gateway-port>/plugins/workspace-artifacts/?file=canvas/<artifact-id>/index.html
-Tailscale: <tailscale-serve-origin>/plugins/workspace-artifacts/?file=canvas/<artifact-id>/index.html
+Local: [Open locally](http://127.0.0.1:<gateway-port>/plugins/workspace-artifacts/?file=canvas/<artifact-id>/index.html) - http://127.0.0.1:<gateway-port>/plugins/workspace-artifacts/?file=canvas/<artifact-id>/index.html
+Tailscale: [Open from phone](<tailscale-serve-origin>/plugins/workspace-artifacts/?file=canvas/<artifact-id>/index.html) - <tailscale-serve-origin>/plugins/workspace-artifacts/?file=canvas/<artifact-id>/index.html
 ```
 
 Resolve `<gateway-port>` from OpenClaw config or status; default to `18789` when not configured. Resolve `<tailscale-serve-origin>` from current OpenClaw status/config when Tailscale Serve is enabled. If no Tailscale Serve origin is configured, still provide the Local URL and state that the Tailscale URL is unavailable.
@@ -121,8 +121,8 @@ Keep the final response short:
 ```text
 Created <title> at artifacts/<artifact-id>/.
 Preview:
-Local: http://127.0.0.1:<gateway-port>/plugins/workspace-artifacts/?file=canvas/<artifact-id>/index.html
-Tailscale: <tailscale-serve-origin>/plugins/workspace-artifacts/?file=canvas/<artifact-id>/index.html
+Local: [Open locally](http://127.0.0.1:<gateway-port>/plugins/workspace-artifacts/?file=canvas/<artifact-id>/index.html) - http://127.0.0.1:<gateway-port>/plugins/workspace-artifacts/?file=canvas/<artifact-id>/index.html
+Tailscale: [Open from phone](<tailscale-serve-origin>/plugins/workspace-artifacts/?file=canvas/<artifact-id>/index.html) - <tailscale-serve-origin>/plugins/workspace-artifacts/?file=canvas/<artifact-id>/index.html
 Entry: canvas/<artifact-id>/index.html
 ```
 
