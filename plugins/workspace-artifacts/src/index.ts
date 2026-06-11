@@ -360,10 +360,9 @@ function renderAppHtml(root: string): string {
       .title span { font-size: 12px; }
       .toolbar { display: none; }
       main { position: relative; display: block; min-height: 0; overflow: hidden; }
-      aside, section { position: absolute; inset: 0; display: none; border: 0; min-height: 0; }
-      body[data-mobile-view="files"] aside,
-      body[data-mobile-view="edit"] .editor,
-      body[data-mobile-view="preview"] .preview { display: grid; }
+      aside, section { position: absolute; inset: 0; z-index: 0; display: none !important; border: 0; min-height: 0; }
+      aside.mobile-active,
+      section.mobile-active { z-index: 1; display: grid !important; }
       aside { grid-template-rows: auto 1fr; }
       .editor { grid-template-rows: auto 1fr auto; }
       .preview { grid-template-rows: auto 1fr; }
@@ -401,6 +400,7 @@ function renderAppHtml(root: string): string {
         min-width: 42px;
         min-height: 42px;
         border-radius: 999px;
+        touch-action: manipulation;
       }
       .mobile-actions button { padding: 0 12px; background: var(--panel); }
       .mobile-actions button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -420,16 +420,16 @@ function renderAppHtml(root: string): string {
       </div>
     </header>
     <main>
-      <aside>
+      <aside id="filesPanel">
         <div class="pathbar"><input id="dirPath" value="" aria-label="Directory path"><button id="openDir">Open</button></div>
         <div id="filelist" class="filelist"></div>
       </aside>
-      <section class="editor">
+      <section id="editorPanel" class="editor">
         <div class="filebar"><input id="filePath" value="" aria-label="File path"></div>
         <textarea id="editor" spellcheck="false"></textarea>
         <div id="status" class="status">Ready</div>
       </section>
-      <section class="preview">
+      <section id="previewPanel" class="preview">
         <h2>Preview</h2>
         <div id="preview" class="previewbody"><div class="empty">Open a file</div></div>
       </section>
@@ -454,11 +454,38 @@ function renderAppHtml(root: string): string {
     function setMobileView(view) {
       state.mobileView = view;
       document.body.dataset.mobileView = view;
+      const panels = {
+        files: qs("filesPanel"),
+        edit: qs("editorPanel"),
+        preview: qs("previewPanel"),
+      };
+      for (const [name, panel] of Object.entries(panels)) {
+        const active = name === view;
+        panel.classList.toggle("mobile-active", active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
+      }
       for (const id of ["mobileFiles", "mobileEdit", "mobilePreview"]) qs(id).classList.remove("active");
       if (view === "files") qs("mobileFiles").classList.add("active");
       if (view === "edit") qs("mobileEdit").classList.add("active");
       if (view === "preview") qs("mobilePreview").classList.add("active");
       qs("mobileSwitcher").classList.remove("open");
+    }
+
+    function bindMobileAction(id, action) {
+      const button = qs(id);
+      let lastPointerAt = 0;
+      button.addEventListener("pointerup", (event) => {
+        lastPointerAt = Date.now();
+        event.preventDefault();
+        event.stopPropagation();
+        action();
+      });
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (Date.now() - lastPointerAt < 700) return;
+        action();
+      });
     }
 
     async function requestJson(url, options) {
@@ -564,10 +591,10 @@ function renderAppHtml(root: string): string {
     qs("openDir").onclick = () => loadTree(qs("dirPath").value);
     qs("refresh").onclick = () => loadTree(state.dir).catch((err) => status(err.message, true));
     qs("save").onclick = () => saveFile().catch((err) => status(err.message, true));
-    qs("mobileSave").onclick = () => saveFile().catch((err) => status(err.message, true));
-    qs("mobileFiles").onclick = () => setMobileView("files");
-    qs("mobileEdit").onclick = () => setMobileView("edit");
-    qs("mobilePreview").onclick = () => setMobileView("preview");
+    bindMobileAction("mobileSave", () => saveFile().catch((err) => status(err.message, true)));
+    bindMobileAction("mobileFiles", () => setMobileView("files"));
+    bindMobileAction("mobileEdit", () => setMobileView("edit"));
+    bindMobileAction("mobilePreview", () => setMobileView("preview"));
     qs("mobileSwitcher").addEventListener("click", (event) => {
       event.stopPropagation();
     });
