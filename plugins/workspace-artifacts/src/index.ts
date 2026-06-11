@@ -378,37 +378,33 @@ function renderAppHtml(root: string): string {
         position: fixed;
         right: 14px;
         bottom: calc(14px + env(safe-area-inset-bottom));
-        z-index: 20;
+        z-index: 2147483647;
         display: grid;
         justify-items: end;
         gap: 8px;
       }
       .mobile-actions {
-        display: grid;
+        display: flex;
         gap: 8px;
-        justify-items: end;
-        opacity: 0;
-        pointer-events: none;
-        transform: translateY(8px);
-        transition: opacity .16s ease, transform .16s ease;
-      }
-      .mobile-switcher:hover .mobile-actions,
-      .mobile-switcher:focus-within .mobile-actions,
-      .mobile-switcher.open .mobile-actions {
+        align-items: center;
+        justify-content: end;
         opacity: 1;
         pointer-events: auto;
-        transform: translateY(0);
-      }
-      .mobile-actions button,
-      #mobileMenu {
-        min-width: 48px;
-        min-height: 48px;
+        padding: 6px;
+        border: 1px solid var(--line);
         border-radius: 999px;
+        background: color-mix(in srgb, var(--panel) 94%, transparent);
         box-shadow: 0 8px 24px rgba(0,0,0,.24);
+        backdrop-filter: blur(10px);
       }
-      .mobile-actions button { padding: 0 14px; background: var(--panel); }
+      .mobile-actions button {
+        min-width: 42px;
+        min-height: 42px;
+        border-radius: 999px;
+      }
+      .mobile-actions button { padding: 0 12px; background: var(--panel); }
       .mobile-actions button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-      #mobileMenu { width: 56px; height: 56px; padding: 0; background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+      #mobileMenu { display: none; }
     }
   </style>
 </head>
@@ -572,7 +568,9 @@ function renderAppHtml(root: string): string {
     qs("mobileFiles").onclick = () => setMobileView("files");
     qs("mobileEdit").onclick = () => setMobileView("edit");
     qs("mobilePreview").onclick = () => setMobileView("preview");
-    qs("mobileMenu").onclick = () => qs("mobileSwitcher").classList.toggle("open");
+    qs("mobileSwitcher").addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
     qs("newFile").onclick = () => {
       const name = prompt("Path");
       if (!name) return;
