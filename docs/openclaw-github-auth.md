@@ -87,6 +87,27 @@ https://TOKEN@github.com/owner/repo.git
 
 Git credential matching can fail when the remote URL already has a username.
 
+## foxcale-coding PAT Override
+
+The `foxcale-coding` agent must use the f-project PAT, not the general GitHub
+token, as its effective GitHub credential. Its per-agent sandbox setup command
+is:
+
+```text
+sh /workspace/.openclaw/foxcale-github-auth.sh
+```
+
+Deploy `config/openclaw-agent-project/foxcale-github-auth.sh` to:
+
+```text
+~/.openclaw/workspaces/foxcale-coding/.openclaw/foxcale-github-auth.sh
+```
+
+The script reads `GITHUB_PAT_F_PROJECT` from the mounted runtime secrets and
+writes it as `GITHUB_TOKEN`, `GH_TOKEN`, `.git-credentials`, and `gh`
+`hosts.yml`. It falls back to the general `GITHUB_TOKEN` only when the
+f-project PAT is absent.
+
 ## Apply Sequence
 
 After updating `/home/yasu/.openclaw/openclaw.json`:

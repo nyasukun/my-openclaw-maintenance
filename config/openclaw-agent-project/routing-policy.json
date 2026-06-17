@@ -1,0 +1,497 @@
+{
+  "version": 1,
+  "default_entry_agent": "router-agent",
+  "handoff_payload_version": 1,
+  "orchestration_mode": "broadcast_self_select_streaming",
+  "routing_log": {
+    "workspace": "router-agent",
+    "path": "routing/routing-decisions.jsonl",
+    "fields": [
+      "timestamp",
+      "source_channel",
+      "source_thread_id",
+      "user_id",
+      "orchestration_id",
+      "broadcast_agents",
+      "responding_agents",
+      "selected_agents",
+      "routing_reason",
+      "sensitivity",
+      "requested_action",
+      "event_type",
+      "final_synthesis_sent"
+    ]
+  },
+  "handoff_payload_schema": {
+    "orchestration_id": "string",
+    "source_channel": "telegram|slack|cli|web",
+    "source_thread_id": "string",
+    "user_id": "string",
+    "original_message": "string",
+    "latest_user_comment": "string|null",
+    "normalized_intent": "string",
+    "broadcast_agents": [
+      "work-cisco",
+      "azabu-corporate",
+      "personal",
+      "coding",
+      "foxcale-advisor",
+      "foxcale-coding",
+      "learning-kb"
+    ],
+    "selected_agents": [],
+    "routing_reason": "string",
+    "sensitivity": "low|medium|high",
+    "context_summary": "string",
+    "known_subagent_results": [],
+    "attachments": [],
+    "requested_action": "answer|draft|execute|schedule|search|other",
+    "response_contract": "CLAIM|CLAIM_PARTIAL|NO_CLAIM plus STREAM_UPDATE|FINAL_RESULT|BLOCKED"
+  },
+  "broadcast_policy": {
+    "entry_agent": "router-agent",
+    "target_agents": [
+      "work-cisco",
+      "azabu-corporate",
+      "personal",
+      "coding",
+      "foxcale-advisor",
+      "foxcale-coding",
+      "learning-kb"
+    ],
+    "do_not_wait_for_all": true,
+    "claim_window_ms": 15000,
+    "soft_synthesis_deadline_ms": 90000,
+    "final_synthesis_deadline_ms": 300000,
+    "minimum_useful_claims_before_streaming": 1,
+    "spawn": {
+      "mode": "run",
+      "context": "isolated",
+      "task_name_prefix": "broadcast",
+      "require_agent_id": true
+    },
+    "streaming": {
+      "progressive_user_updates": true,
+      "token_level_subagent_streaming": false,
+      "stream_on_status": [
+        "CLAIM",
+        "CLAIM_PARTIAL",
+        "STREAM_UPDATE",
+        "FINAL_RESULT",
+        "BLOCKED"
+      ],
+      "hide_status": [
+        "NO_CLAIM"
+      ],
+      "interim_label": "途中経過",
+      "final_label": "統合回答",
+      "late_update_label": "追加更新"
+    },
+    "parent_child_dialogue": {
+      "enabled": true,
+      "follow_up_when": [
+        "subagent_result_conflicts_with_another_result",
+        "subagent_result_is_incomplete_but_promising",
+        "user_comment_before_final_targets_subagent",
+        "critical_assumption_needs_agent_confirmation"
+      ],
+      "max_follow_ups_per_agent": 3
+    },
+    "late_result_policy": {
+      "after_final_answer": "send_only_if_material_correction_or_new_useful_detail",
+      "otherwise": "NO_REPLY"
+    }
+  },
+  "subagent_response_contract": {
+    "claim_statuses": [
+      "CLAIM",
+      "CLAIM_PARTIAL",
+      "NO_CLAIM"
+    ],
+    "work_statuses": [
+      "STREAM_UPDATE",
+      "FINAL_RESULT",
+      "BLOCKED"
+    ],
+    "required_fields": [
+      "agent",
+      "claim",
+      "confidence",
+      "reason",
+      "result_or_next_step"
+    ],
+    "no_claim_behavior": "Return NO_CLAIM quickly, with no web/search/repo/domain tool calls.",
+    "claim_behavior": "Return useful work as soon as possible. If later clarification is needed, accept parent follow-up from router-agent in the same orchestration.",
+    "partial_claim_behavior": "Return the in-scope part, identify the boundary, and let router-agent decide whether another agent also needs follow-up."
+  },
+  "aggregation_policy": {
+    "final_answer_required": true,
+    "final_answer_label": "統合回答",
+    "must_mention_user_comments_reflected": true,
+    "must_evaluate_subagent_outputs": true,
+    "conflict_handling": "Surface resolved conflicts briefly; ask subagents follow-up before finalizing when the conflict affects the answer.",
+    "all_no_claim_behavior": "Ask one concise clarification question instead of guessing.",
+    "late_result_behavior": "After final synthesis, send an additional update only for material corrections or newly useful details."
+  },
+  "user_interruption_policy": {
+    "before_final_synthesis": {
+      "attach_to_active_orchestration": true,
+      "treat_as_new_request": false,
+      "named_agent_patterns": [
+        "<agent-id>",
+        "<agent-id> 側",
+        "<agent-id> の案",
+        "personal",
+        "coding",
+        "work-cisco",
+        "azabu-corporate",
+        "foxcale-advisor",
+        "foxcale-coding",
+        "learning-kb"
+      ],
+      "forward_named_comments_to_target_agent": true,
+      "forward_relevant_comments_to_inferred_agents": true,
+      "ask_clarification_when_target_unclear_and_comment_changes_task": true,
+      "reuse_existing_partial_results": true,
+      "reopen_synthesis": true
+    },
+    "after_final_synthesis": {
+      "treat_as_follow_up_or_new_request": true,
+      "do_not_mutate_closed_orchestration": true
+    }
+  },
+  "ambiguous": {
+    "selected_agent": "router-agent",
+    "ask_clarification": true,
+    "question": "どの用途の agent に渡すべきか判断できません。Cisco 業務、法人運営、個人、coding、foxcale、学習のどれに近い依頼ですか？"
+  },
+  "slash_commands": {
+    "agent_list_commands": [
+      "/agent",
+      "/agent list"
+    ],
+    "explicit_route_pattern": "/agent <agent-id> <request>",
+    "agent_id_aliases": {
+      "work_cisco": "work-cisco",
+      "azabu_corporate": "azabu-corporate",
+      "foxcale_advisor": "foxcale-advisor",
+      "foxcale_coding": "foxcale-coding",
+      "learning_kb": "learning-kb"
+    },
+    "purpose_agent_ids": [
+      "work-cisco",
+      "azabu-corporate",
+      "personal",
+      "coding",
+      "foxcale-advisor",
+      "foxcale-coding",
+      "learning-kb"
+    ],
+    "plugin": "agent-command",
+    "list_behavior": "Return configured purpose agents without invoking an LLM.",
+    "route_behavior": "Validate the requested agent id, immediately acknowledge the handoff, then run the stripped task directly on that agent and deliver the final reply back to the source channel. This explicit command is the intentional single-agent exception to the default broadcast orchestration flow."
+  },
+  "misroute_return_policy": {
+    "return_agent": "router-agent",
+    "purpose_agents_may_return": true,
+    "purpose_agents_should_start_when_plausibly_in_scope": true,
+    "purpose_agents_stop_on_clear_mismatch": true,
+    "hint_fields": [
+      "source_agent",
+      "original_message",
+      "wrong_owner_reason",
+      "guessed_correct_agent",
+      "minimal_context",
+      "requested_router_action"
+    ]
+  },
+  "sensitivity_policy": {
+    "high": {
+      "require_confirmation": true,
+      "route_only_to_exact_domain_agent": true,
+      "router_secret_access": "common-vault-only"
+    },
+    "customer_keywords": [
+      "foxcale",
+      "foxcale様",
+      "顧客",
+      "契約",
+      "請求",
+      "機密",
+      "secret",
+      "credential",
+      "token"
+    ]
+  },
+  "agents": {
+    "work-cisco": {
+      "summary": "Cisco business, partner support, Disti, security proposals, technical reviews",
+      "workspace": "workspaces/work-cisco",
+      "vaults": [
+        "openclaw-work-cisco",
+        "openclaw-pod"
+      ]
+    },
+    "azabu-corporate": {
+      "summary": "Azabu Tech, Atlantis Circle, corporate operations, contracts, invoices, strategy, and Azabu-owned repository work for azabu.io",
+      "workspace": "workspaces/azabu-corporate",
+      "active_repos": [
+        {
+          "name": "azabu.io",
+          "remote": "nyasukun/azabu.io.git",
+          "workspace_hint": "azabu.io"
+        }
+      ],
+      "vaults": [
+        "openclaw-azabu-corporate",
+        "openclaw-pod"
+      ]
+    },
+    "personal": {
+      "summary": "Personal schedule, life admin, shopping, travel, family, personal notes",
+      "workspace": "workspaces/personal",
+      "vaults": [
+        "openclaw-personal",
+        "openclaw-pod"
+      ]
+    },
+    "coding": {
+      "summary": "Generic coding, implementation, debugging, tests, CI, PRs, and requirements definition",
+      "workspace": "workspaces/coding",
+      "vaults": [
+        "openclaw-coding",
+        "openclaw-pod"
+      ],
+      "model_policy": {
+        "coding": "claude-cli/claude-opus-4-8",
+        "requirements": "openai/gpt-5.5"
+      }
+    },
+    "foxcale-advisor": {
+      "summary": "foxcale technical advisory, requirements, architecture, meeting notes, proposals, and risk/decision logs",
+      "workspace": "workspaces/foxcale-advisor",
+      "vaults": [
+        "openclaw-foxcale-advisor",
+        "openclaw-pod"
+      ],
+      "model_policy": {
+        "advisory": "openai/gpt-5.5",
+        "requirements": "openai/gpt-5.5"
+      }
+    },
+    "foxcale-coding": {
+      "summary": "foxcale customer coding, implementation, debugging, tests, CI, PRs, and repository work",
+      "workspace": "workspaces/foxcale-coding",
+      "active_repos": [
+        {
+          "name": "fairscope-mock",
+          "remote": "fy26q2-azabu-f/fairscope-mock.git",
+          "workspace_hint": "repos/fairscope-mock"
+        }
+      ],
+      "vaults": [
+        "openclaw-foxcale-coding",
+        "openclaw-pod"
+      ],
+      "model_policy": {
+        "coding": "claude-cli/claude-opus-4-8",
+        "requirements": "openai/gpt-5.5"
+      }
+    },
+    "learning-kb": {
+      "summary": "Learning knowledge base, reading, certifications, study notes",
+      "workspace": "workspaces/learning-kb",
+      "vaults": [
+        "openclaw-learning-kb",
+        "openclaw-pod"
+      ]
+    }
+  },
+  "routes": [
+    {
+      "id": "cisco-business",
+      "priority": 10,
+      "selected_agent": "work-cisco",
+      "requested_action_default": "draft",
+      "sensitivity_default": "medium",
+      "routing_reason": "Cisco, partner, Disti, or security business context",
+      "match": {
+        "any_keywords": [
+          "cisco",
+          "Cisco",
+          "secure access",
+          "secure endpoint",
+          "secure firewall",
+          "duo",
+          "umbrella",
+          "Disti",
+          "disti",
+          "ディスティ",
+          "パートナー",
+          "セキュリティ案件",
+          "セキュリティ提案",
+          "Splunk",
+          "splunk",
+          "firewall",
+          "zero trust",
+          "ゼロトラスト"
+        ]
+      }
+    },
+    {
+      "id": "azabu-corporate",
+      "priority": 20,
+      "selected_agent": "azabu-corporate",
+      "requested_action_default": "draft",
+      "sensitivity_default": "high",
+      "routing_reason": "Azabu Tech, Atlantis Circle, corporate, contract, invoice, or management context",
+      "match": {
+        "any_keywords": [
+          "azabu",
+          "Azabu",
+          "azabu.io",
+          "azabu-academy",
+          "麻布技術研究所",
+          "法人",
+          "契約",
+          "請求",
+          "請求書",
+          "Atlantis Circle",
+          "atlantis circle",
+          "経営",
+          "事業開発",
+          "会社運営"
+        ]
+      }
+    },
+    {
+      "id": "personal",
+      "priority": 30,
+      "selected_agent": "personal",
+      "requested_action_default": "schedule",
+      "sensitivity_default": "medium",
+      "routing_reason": "Personal life, schedule, shopping, travel, family, or personal notes context",
+      "match": {
+        "any_keywords": [
+          "個人",
+          "予定",
+          "生活",
+          "買い物",
+          "旅行",
+          "家族",
+          "個人メモ",
+          "週末",
+          "夕食",
+          "家計",
+          "予約",
+          "予約の電話",
+          "電話予約",
+          "店に電話",
+          "レストラン予約",
+          "美容院予約",
+          "病院予約"
+        ]
+      }
+    },
+    {
+      "id": "foxcale-coding",
+      "priority": 4,
+      "selected_agent": "foxcale-coding",
+      "requested_action_default": "draft",
+      "sensitivity_default": "high",
+      "routing_reason": "foxcale customer coding or repository context",
+      "match": {
+        "all_keywords": [
+          "foxcale"
+        ],
+        "any_keywords": [
+          "coding",
+          "コード",
+          "実装",
+          "バグ",
+          "修正",
+          "リファクタ",
+          "テスト",
+          "CI",
+          "PR",
+          "pull request",
+          "GitHub",
+          "repo",
+          "repository"
+        ]
+      }
+    },
+    {
+      "id": "foxcale-advisor",
+      "priority": 5,
+      "selected_agent": "foxcale-advisor",
+      "requested_action_default": "draft",
+      "sensitivity_default": "high",
+      "routing_reason": "foxcale customer advisory or project context",
+      "match": {
+        "any_keywords": [
+          "foxcale",
+          "foxcale様",
+          "foxcale 顧客",
+          "foxcale案件",
+          "foxcaleプロジェクト",
+          "定例議事録",
+          "技術顧問"
+        ]
+      }
+    },
+    {
+      "id": "learning-kb",
+      "priority": 40,
+      "selected_agent": "learning-kb",
+      "requested_action_default": "answer",
+      "sensitivity_default": "low",
+      "routing_reason": "Learning, reading, certification, or knowledge-base context",
+      "match": {
+        "any_keywords": [
+          "学習",
+          "ナレッジベース",
+          "読書",
+          "資格",
+          "学習ノート",
+          "CISSP",
+          "復習",
+          "クイズ",
+          "読書メモ",
+          "概念整理"
+        ]
+      }
+    },
+    {
+      "id": "generic-coding",
+      "priority": 50,
+      "selected_agent": "coding",
+      "requested_action_default": "execute",
+      "sensitivity_default": "medium",
+      "routing_reason": "Generic coding, repository, implementation, debugging, tests, or requirements context",
+      "match": {
+        "any_keywords": [
+          "coding",
+          "コード",
+          "実装",
+          "バグ",
+          "修正",
+          "リファクタ",
+          "テスト",
+          "CI",
+          "PR",
+          "pull request",
+          "GitHub",
+          "repo",
+          "repository",
+          "要件定義",
+          "acceptance criteria"
+        ]
+      },
+      "model_policy": {
+        "coding": "claude-cli/claude-opus-4-8",
+        "requirements": "openai/gpt-5.5"
+      }
+    }
+  ]
+}

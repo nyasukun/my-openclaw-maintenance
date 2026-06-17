@@ -1,0 +1,23 @@
+{
+  "id": "agent-command",
+  "name": "Agent Command",
+  "description": "List configured purpose agents and run explicit /agent requests on the selected agent.",
+  "version": "0.1.0",
+  "activation": {
+    "onStartup": true,
+    "onCommands": [
+      "agent"
+    ]
+  },
+  "commandAliases": [
+    {
+      "name": "agent",
+      "kind": "runtime-slash"
+    }
+  ],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

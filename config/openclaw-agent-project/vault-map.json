@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "common_vault": "openclaw-pod",
+  "agent_vaults": {
+    "router-agent": [
+      "openclaw-pod",
+      "openclaw-router"
+    ],
+    "work-cisco": [
+      "openclaw-pod",
+      "openclaw-work-cisco"
+    ],
+    "azabu-corporate": [
+      "openclaw-pod",
+      "openclaw-azabu-corporate"
+    ],
+    "personal": [
+      "openclaw-pod",
+      "openclaw-personal"
+    ],
+    "coding": [
+      "openclaw-pod",
+      "openclaw-coding"
+    ],
+    "foxcale-advisor": [
+      "openclaw-pod",
+      "openclaw-foxcale-advisor"
+    ],
+    "foxcale-coding": [
+      "openclaw-pod",
+      "openclaw-foxcale-coding"
+    ],
+    "learning-kb": [
+      "openclaw-pod",
+      "openclaw-learning-kb"
+    ]
+  },
+  "secret_id_namespaces": {
+    "common": "common/<item>/<field> resolves from openclaw-pod",
+    "router-agent": "router-agent/<item>/<field> resolves from openclaw-router",
+    "work-cisco": "work-cisco/<item>/<field> resolves from openclaw-work-cisco",
+    "azabu-corporate": "azabu-corporate/<item>/<field> resolves from openclaw-azabu-corporate",
+    "personal": "personal/<item>/<field> resolves from openclaw-personal",
+    "coding": "coding/<item>/<field> resolves from openclaw-coding",
+    "foxcale-advisor": "foxcale-advisor/<item>/<field> resolves from openclaw-foxcale-advisor",
+    "foxcale-coding": "foxcale-coding/<item>/<field> resolves from openclaw-foxcale-coding",
+    "learning-kb": "learning-kb/<item>/<field> resolves from openclaw-learning-kb"
+  },
+  "legacy_secret_distribution": {
+    "common_vault": [
+      "telegram",
+      "google",
+      "openclaw-gateway",
+      "ollama",
+      "slack",
+      "openai",
+      "1password",
+      "anthropic"
+    ],
+    "azabu-corporate": [
+      "github/token",
+      "github-workspace-long/*"
+    ],
+    "foxcale-coding": [
+      "github/pat_f_project"
+    ]
+  },
+  "router_policy": {
+    "may_read": [
+      "common/*",
+      "router-agent/*"
+    ],
+    "must_not_read": [
+      "work-cisco/*",
+      "azabu-corporate/*",
+      "personal/*",
+      "coding/*",
+      "foxcale-advisor/*",
+      "foxcale-coding/*",
+      "learning-kb/*"
+    ]
+  }
+}

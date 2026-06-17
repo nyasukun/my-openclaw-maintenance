@@ -1,0 +1,756 @@
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "openai/gpt-5.5",
+        "fallbacks": []
+      },
+      "models": {
+        "openai/gpt-5.5": {
+          "alias": "GPT"
+        }
+      },
+      "workspace": "/home/yasu/.openclaw/workspace",
+      "skills": [],
+      "contextInjection": "never",
+      "bootstrapMaxChars": 12000,
+      "bootstrapTotalMaxChars": 16000,
+      "experimental": {
+        "localModelLean": true
+      },
+      "bootstrapPromptTruncationWarning": "off",
+      "thinkingDefault": "off",
+      "timeoutSeconds": 900,
+      "heartbeat": {
+        "every": "2h",
+        "activeHours": {
+          "start": "08:00",
+          "end": "23:30",
+          "timezone": "Asia/Tokyo"
+        },
+        "model": "openai/gpt-5.4-mini",
+        "includeReasoning": false,
+        "target": "last",
+        "directPolicy": "allow",
+        "timeoutSeconds": 240,
+        "lightContext": true,
+        "isolatedSession": true,
+        "skipWhenBusy": true
+      },
+      "maxConcurrent": 4,
+      "subagents": {
+        "delegationMode": "prefer",
+        "allowAgents": [
+          "hard",
+          "long",
+          "heartbeat"
+        ],
+        "maxConcurrent": 8,
+        "maxSpawnDepth": 2,
+        "maxChildrenPerAgent": 12,
+        "archiveAfterMinutes": 240,
+        "runTimeoutSeconds": 900,
+        "announceTimeoutMs": 120000,
+        "requireAgentId": true
+      },
+      "sandbox": {
+        "mode": "non-main",
+        "backend": "docker",
+        "workspaceAccess": "rw",
+        "sessionToolsVisibility": "spawned",
+        "scope": "session",
+        "workspaceRoot": "/home/yasu/.openclaw/sandboxes",
+        "docker": {
+          "image": "openclaw-sandbox-tools:20260531",
+          "containerPrefix": "openclaw-sbx-",
+          "workdir": "/workspace",
+          "readOnlyRoot": false,
+          "tmpfs": [
+            "/tmp",
+            "/var/tmp",
+            "/run"
+          ],
+          "network": "bridge",
+          "user": "1000:1000",
+          "capDrop": [
+            "ALL"
+          ],
+          "env": {
+            "LANG": "C.UTF-8",
+            "OLLAMA_HOST": "http://host.docker.internal:11434",
+            "OLLAMA_BASE_URL": "http://host.docker.internal:11434",
+            "BASH_ENV": "/workspace/.openclaw/runtime-secret-env.sh"
+          },
+          "setupCommand": "if [ -f /workspace/.openclaw/bootstrap-runtime-secrets.sh ]; then sh /workspace/.openclaw/bootstrap-runtime-secrets.sh; fi",
+          "pidsLimit": 512,
+          "memory": "8g",
+          "memorySwap": "12g",
+          "cpus": 6,
+          "extraHosts": [
+            "host.docker.internal:host-gateway"
+          ],
+          "binds": [
+            "/home/yasu/.openclaw/runtime-secrets:/run/openclaw-secrets:ro"
+          ],
+          "dangerouslyAllowExternalBindSources": true
+        }
+      }
+    },
+    "list": [
+      {
+        "id": "main",
+        "name": "main",
+        "skills": [
+          "clawSpace"
+        ],
+        "tools": {
+          "alsoAllow": [
+            "web_search",
+            "web_fetch"
+          ],
+          "sandbox": {
+            "tools": {
+              "alsoAllow": [
+                "web_search",
+                "web_fetch"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "hard",
+        "name": "hard",
+        "workspace": "/home/yasu/.openclaw/workspace-hard",
+        "model": {
+          "primary": "anthropic/claude-opus-4-7",
+          "fallbacks": []
+        }
+      },
+      {
+        "id": "long",
+        "name": "long",
+        "workspace": "/home/yasu/.openclaw/workspace-long",
+        "model": {
+          "primary": "anthropic/claude-sonnet-4-6",
+          "fallbacks": []
+        }
+      },
+      {
+        "id": "heartbeat",
+        "name": "heartbeat",
+        "workspace": "/home/yasu/.openclaw/workspace-heartbeat",
+        "model": {
+          "primary": "openai/gpt-5.4-mini",
+          "fallbacks": []
+        }
+      },
+      {
+        "id": "telegram-fable",
+        "name": "telegram-fable",
+        "workspace": "/home/yasu/.openclaw/workspace",
+        "model": {
+          "primary": "anthropic/claude-fable-5",
+          "fallbacks": [
+            "claude-cli/claude-opus-4-8",
+            "openai/gpt-5.5"
+          ]
+        },
+        "skills": [
+          "workspace-artifact-builder"
+        ],
+        "tools": {
+          "alsoAllow": [
+            "web_search",
+            "web_fetch"
+          ],
+          "sandbox": {
+            "tools": {
+              "alsoAllow": [
+                "web_search",
+                "web_fetch"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "router-agent",
+        "name": "router-agent",
+        "description": "Telegram and Slack user-facing orchestration agent. Use the strongest configured OpenAI model to understand the user request, broadcast normal work to all configured purpose agents with sessions_spawn, stream useful subagent results back to the user as they arrive, ask targeted follow-up questions to subagents when their outputs are incomplete or conflicting, and finish with a clearly labeled integrated answer. Do not wait for every subagent before helping the user; synthesize when enough evidence exists or the policy deadline is reached. Treat user comments before the integrated answer as updates to the active orchestration, forwarding named or relevant comments to the right subagent. Never do repository, shell, filesystem, or web work directly in router-agent; delegate that work. Never answer as default, web, voice-agent, or claudeclaw.",
+        "workspace": "/home/yasu/.openclaw/workspaces/router-agent",
+        "model": {
+          "primary": "openai/gpt-5.5",
+          "fallbacks": [
+            "openai/gpt-5.4-mini"
+          ]
+        },
+        "thinkingDefault": "medium",
+        "contextInjection": "never",
+        "bootstrapMaxChars": 4000,
+        "bootstrapTotalMaxChars": 6000,
+        "skills": [],
+        "memorySearch": {
+          "enabled": true,
+          "sources": [
+            "memory"
+          ],
+          "extraPaths": [
+            "/home/yasu/.openclaw/workspaces/router-agent/policy"
+          ]
+        },
+        "contextLimits": {
+          "memoryGetMaxChars": 12000,
+          "toolResultMaxChars": 12000,
+          "postCompactionMaxChars": 8000
+        },
+        "subagents": {
+          "delegationMode": "prefer",
+          "allowAgents": [
+            "security-research",
+            "presales-proposal",
+            "infra-ops"
+          ],
+          "requireAgentId": true
+        },
+        "sandbox": {
+          "mode": "all"
+        },
+        "tools": {
+          "allow": [
+            "sessions_spawn",
+            "sessions_yield",
+            "read",
+            "write",
+            "edit",
+            "apply_patch",
+            "exec",
+            "process",
+            "web_search",
+            "web_fetch"
+          ],
+          "deny": [
+            "sessions_send",
+            "browser"
+          ]
+        }
+      },
+      {
+        "id": "work-cisco",
+        "name": "work-cisco",
+        "description": "Cisco business agent for partner support, Disti, security proposals, and technical review. If a request is clearly outside this domain, do not answer directly; return it to router-agent with a misroute hint via sessions_spawn.",
+        "workspace": "/home/yasu/.openclaw/workspaces/work-cisco",
+        "model": {
+          "primary": "openai/gpt-5.5",
+          "fallbacks": [
+            "openai/gpt-5.4-mini"
+          ]
+        },
+        "thinkingDefault": "medium",
+        "skills": [
+          "security-presales",
+          "agent-scope-guard",
+          "cisco-security",
+          "proposal-writing",
+          "meeting-summary",
+          "threat-analysis",
+          "splunk-spl-helper",
+          "firewall-policy-review",
+          "zero-trust-advisor"
+        ],
+        "subagents": {
+          "allowAgents": [
+            "router-agent"
+          ],
+          "requireAgentId": true
+        },
+        "tools": {
+          "profile": "coding",
+          "alsoAllow": [
+            "sessions_spawn",
+            "sessions_yield",
+            "subagents",
+            "agents_list"
+          ],
+          "deny": [
+            "sessions_send"
+          ],
+          "fs": {
+            "workspaceOnly": true
+          },
+          "message": {
+            "allowCrossContextSend": false
+          }
+        }
+      },
+      {
+        "id": "azabu-corporate",
+        "name": "azabu-corporate",
+        "description": "Corporate operations and Azabu product agent for Azabu Tech, Atlantis Circle, contracts, invoices, management work, and Azabu-owned repository work for azabu.io. For Azabu/azabu.io codebase, analytics, GitHub, repo, CI, PR, or implementation requests, inspect /workspace/azabu.io first and do not route to generic coding solely because the request mentions repo work. If a request is clearly outside this domain, return it to router-agent with a misroute hint via sessions_spawn.",
+        "workspace": "/home/yasu/.openclaw/workspaces/azabu-corporate",
+        "model": {
+          "primary": "openai/gpt-5.5",
+          "fallbacks": [
+            "openai/gpt-5.4-mini"
+          ]
+        },
+        "thinkingDefault": "medium",
+        "skills": [
+          "corporate-admin",
+          "agent-scope-guard",
+          "contract-review",
+          "invoice-support",
+          "github",
+          "proposal-writing",
+          "strategy-planning",
+          "customer-discovery",
+          "meeting-summary"
+        ],
+        "subagents": {
+          "allowAgents": [
+            "router-agent"
+          ],
+          "requireAgentId": true
+        },
+        "tools": {
+          "profile": "coding",
+          "alsoAllow": [
+            "sessions_spawn",
+            "sessions_yield",
+            "subagents",
+            "agents_list"
+          ],
+          "deny": [
+            "sessions_send"
+          ],
+          "fs": {
+            "workspaceOnly": true
+          },
+          "message": {
+            "allowCrossContextSend": false
+          }
+        }
+      },
+      {
+        "id": "personal",
+        "name": "personal",
+        "description": "Personal life admin agent for schedule, travel, shopping, family, and personal notes. If a request is clearly outside this domain, do not answer the task content; return a MISROUTE hint for router-agent.",
+        "workspace": "/home/yasu/.openclaw/workspaces/personal",
+        "model": {
+          "primary": "openai/gpt-5.5",
+          "fallbacks": [
+            "openai/gpt-5.4-mini"
+          ]
+        },
+        "thinkingDefault": "low",
+        "skills": [
+          "personal-assistant",
+          "agent-scope-guard",
+          "calendar-helper",
+          "travel-planner",
+          "shopping-helper",
+          "household-admin",
+          "note-organizer"
+        ],
+        "subagents": {
+          "allowAgents": [
+            "router-agent"
+          ],
+          "requireAgentId": true
+        },
+        "tools": {
+          "profile": "messaging",
+          "alsoAllow": [
+            "sessions_spawn",
+            "sessions_yield",
+            "subagents",
+            "agents_list"
+          ],
+          "deny": [
+            "sessions_send"
+          ],
+          "fs": {
+            "workspaceOnly": true
+          },
+          "message": {
+            "allowCrossContextSend": false
+          }
+        }
+      },
+      {
+        "id": "coding",
+        "name": "coding",
+        "description": "Generic coding agent for repository work, implementation, debugging, tests, CI, and requirements definition. If a request is clearly outside this domain, do not answer directly; return it to router-agent with a misroute hint via sessions_spawn.",
+        "workspace": "/home/yasu/.openclaw/workspaces/coding",
+        "model": {
+          "primary": "claude-cli/claude-opus-4-8",
+          "fallbacks": [
+            "openai/gpt-5.5"
+          ]
+        },
+        "models": {
+          "claude-cli/claude-opus-4-8": {
+            "alias": "coding"
+          },
+          "openai/gpt-5.5": {
+            "alias": "requirements"
+          }
+        },
+        "thinkingDefault": "medium",
+        "skills": [
+          "coding-agent",
+          "agent-scope-guard",
+          "coding-model-policy",
+          "github",
+          "gh-issues",
+          "spike",
+          "python-debugpy",
+          "node-inspect-debugger",
+          "requirements-analysis"
+        ],
+        "subagents": {
+          "allowAgents": [
+            "router-agent"
+          ],
+          "requireAgentId": true
+        },
+        "tools": {
+          "profile": "coding",
+          "alsoAllow": [
+            "sessions_spawn",
+            "sessions_yield",
+            "subagents",
+            "agents_list"
+          ],
+          "deny": [
+            "sessions_send"
+          ],
+          "fs": {
+            "workspaceOnly": true
+          },
+          "message": {
+            "allowCrossContextSend": false
+          }
+        }
+      },
+      {
+        "id": "foxcale-advisor",
+        "name": "foxcale-advisor",
+        "description": "foxcale technical advisor agent for architecture, requirements, advisory notes, meetings, risks, and customer-facing recommendations. If a request is clearly outside this domain, do not answer directly; return it to router-agent with a misroute hint via sessions_spawn.",
+        "workspace": "/home/yasu/.openclaw/workspaces/foxcale-advisor",
+        "model": {
+          "primary": "openai/gpt-5.5",
+          "fallbacks": [
+            "openai/gpt-5.4-mini"
+          ]
+        },
+        "thinkingDefault": "medium",
+        "skills": [
+          "project-management",
+          "agent-scope-guard",
+          "customer-delivery",
+          "meeting-summary",
+          "proposal-writing",
+          "requirements-analysis",
+          "risk-log",
+          "decision-log",
+          "pm-tailoring"
+        ],
+        "subagents": {
+          "allowAgents": [
+            "router-agent"
+          ],
+          "requireAgentId": true
+        },
+        "tools": {
+          "profile": "coding",
+          "alsoAllow": [
+            "sessions_spawn",
+            "sessions_yield",
+            "subagents",
+            "agents_list"
+          ],
+          "deny": [
+            "sessions_send"
+          ],
+          "fs": {
+            "workspaceOnly": true
+          },
+          "message": {
+            "allowCrossContextSend": false
+          }
+        }
+      },
+      {
+        "id": "foxcale-coding",
+        "name": "foxcale-coding",
+        "description": "foxcale customer coding agent for implementation and repository work, with foxcale project-specific skills enabled. If a request is clearly outside this domain, do not answer directly; return it to router-agent with a misroute hint via sessions_spawn.",
+        "workspace": "/home/yasu/.openclaw/workspaces/foxcale-coding",
+        "model": {
+          "primary": "claude-cli/claude-opus-4-8",
+          "fallbacks": [
+            "openai/gpt-5.5"
+          ]
+        },
+        "models": {
+          "claude-cli/claude-opus-4-8": {
+            "alias": "coding"
+          },
+          "openai/gpt-5.5": {
+            "alias": "requirements"
+          }
+        },
+        "thinkingDefault": "medium",
+        "skills": [
+          "coding-agent",
+          "agent-scope-guard",
+          "coding-model-policy",
+          "github",
+          "gh-issues",
+          "spike",
+          "python-debugpy",
+          "node-inspect-debugger",
+          "project-management",
+          "customer-delivery",
+          "meeting-summary",
+          "requirements-analysis",
+          "risk-log",
+          "decision-log",
+          "pm-tailoring"
+        ],
+        "subagents": {
+          "allowAgents": [
+            "router-agent"
+          ],
+          "requireAgentId": true
+        },
+        "sandbox": {
+          "docker": {
+            "setupCommand": "if [ -f /workspace/.openclaw/bootstrap-runtime-secrets.sh ]; then sh /workspace/.openclaw/bootstrap-runtime-secrets.sh; fi\nsh /workspace/.openclaw/foxcale-github-auth.sh"
+          }
+        },
+        "tools": {
+          "profile": "coding",
+          "alsoAllow": [
+            "sessions_spawn",
+            "sessions_yield",
+            "subagents",
+            "agents_list"
+          ],
+          "deny": [
+            "sessions_send"
+          ],
+          "fs": {
+            "workspaceOnly": true
+          },
+          "message": {
+            "allowCrossContextSend": false
+          }
+        }
+      },
+      {
+        "id": "learning-kb",
+        "name": "learning-kb",
+        "description": "Learning knowledge-base agent for reading, certifications, study notes, explanations, and quizzes. If a request is clearly outside this domain, do not answer directly; return it to router-agent with a misroute hint via sessions_spawn.",
+        "workspace": "/home/yasu/.openclaw/workspaces/learning-kb",
+        "model": {
+          "primary": "openai/gpt-5.5",
+          "fallbacks": [
+            "openai/gpt-5.4-mini"
+          ]
+        },
+        "thinkingDefault": "medium",
+        "skills": [
+          "learning-kb",
+          "agent-scope-guard",
+          "spaced-repetition",
+          "book-summary",
+          "concept-map",
+          "quiz-generator",
+          "note-linker"
+        ],
+        "subagents": {
+          "allowAgents": [
+            "router-agent"
+          ],
+          "requireAgentId": true
+        },
+        "tools": {
+          "profile": "coding",
+          "alsoAllow": [
+            "sessions_spawn",
+            "sessions_yield",
+            "subagents",
+            "agents_list"
+          ],
+          "deny": [
+            "sessions_send"
+          ],
+          "fs": {
+            "workspaceOnly": true
+          },
+          "message": {
+            "allowCrossContextSend": false
+          }
+        }
+      },
+      {
+        "id": "infra-ops",
+        "name": "infra-ops",
+        "workspace": "/home/yasu/.openclaw/workspace-infra-ops",
+        "agentDir": "/home/yasu/.openclaw/agents/infra-ops/agent",
+        "model": "openai/gpt-5.5",
+        "skills": [
+          "spike",
+          "requirements-analysis"
+        ],
+        "sandbox": {
+          "mode": "all",
+          "workspaceAccess": "rw",
+          "scope": "agent",
+          "docker": {
+            "network": "bridge",
+            "setupCommand": "if [ -f /workspace/.openclaw/bootstrap-runtime-secrets.sh ]; then sh /workspace/.openclaw/bootstrap-runtime-secrets.sh; fi"
+          }
+        },
+        "tools": {
+          "allow": [
+            "read",
+            "write",
+            "edit",
+            "apply_patch",
+            "exec",
+            "process"
+          ],
+          "deny": [
+            "browser",
+            "sessions_send",
+            "sessions_spawn"
+          ],
+          "exec": {
+            "host": "auto",
+            "mode": "full"
+          }
+        }
+      },
+      {
+        "id": "security-research",
+        "name": "security-research",
+        "workspace": "/home/yasu/.openclaw/workspace-security-research",
+        "agentDir": "/home/yasu/.openclaw/agents/security-research/agent",
+        "model": "openai/gpt-5.5",
+        "skills": [
+          "threat-analysis",
+          "agent-scope-guard"
+        ],
+        "sandbox": {
+          "mode": "all",
+          "workspaceAccess": "rw",
+          "scope": "agent"
+        },
+        "tools": {
+          "allow": [
+            "read",
+            "write",
+            "web_search",
+            "web_fetch"
+          ],
+          "deny": [
+            "exec",
+            "browser",
+            "sessions_send",
+            "sessions_spawn"
+          ]
+        }
+      },
+      {
+        "id": "presales-proposal",
+        "name": "presales-proposal",
+        "workspace": "/home/yasu/.openclaw/workspace-presales-proposal",
+        "agentDir": "/home/yasu/.openclaw/agents/presales-proposal/agent",
+        "model": "openai/gpt-5.5",
+        "skills": [
+          "proposal-writing",
+          "security-presales",
+          "requirements-analysis"
+        ],
+        "sandbox": {
+          "mode": "all",
+          "workspaceAccess": "rw",
+          "scope": "agent"
+        },
+        "tools": {
+          "allow": [
+            "read",
+            "write",
+            "apply_patch"
+          ],
+          "deny": [
+            "exec",
+            "browser",
+            "sessions_send",
+            "sessions_spawn"
+          ]
+        }
+      }
+    ]
+  },
+  "bindings": [
+    {
+      "type": "route",
+      "agentId": "router-agent",
+      "comment": "Route Telegram ingress to router-agent for purpose-specific handoff.",
+      "match": {
+        "channel": "telegram"
+      },
+      "session": {
+        "dmScope": "per-channel-peer"
+      }
+    },
+    {
+      "type": "route",
+      "agentId": "router-agent",
+      "comment": "Route Slack ingress to router-agent for purpose-specific handoff.",
+      "match": {
+        "channel": "slack"
+      },
+      "session": {
+        "dmScope": "per-channel-peer"
+      }
+    }
+  ],
+  "tools": {
+    "agentToAgent": {
+      "enabled": false
+    }
+  },
+  "messages": {
+    "queue": {
+      "mode": "collect",
+      "debounceMs": 1000,
+      "cap": 20,
+      "drop": "summarize"
+    }
+  },
+  "plugins": {
+    "entries": {
+      "codex": {
+        "enabled": true,
+        "config": {
+          "appServer": {
+            "experimental": {
+              "sandboxExecServer": true
+            },
+            "transport": "stdio",
+            "codeModeOnly": false,
+            "requestTimeoutMs": 60000,
+            "turnCompletionIdleTimeoutMs": 60000,
+            "postToolRawAssistantCompletionIdleTimeoutMs": 300000
+          },
+          "codexDynamicToolsLoading": "searchable",
+          "codexDynamicToolsExclude": []
+        }
+      }
+    }
+  }
+}

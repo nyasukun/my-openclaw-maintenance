@@ -68,3 +68,7 @@ Operational notes:
 - [OpenClaw skill deployment](docs/openclaw-skill-deployment.md): keep public
   skill sources generic, then inject the current Tailscale Serve URL only into
   the deployed OpenClaw-managed skill copy.
+- [OpenClaw concern lanes](config/openclaw-concern-lanes/README.md): current
+  Telegram/Slack `router-agent` setup with `security-research`,
+  `presales-proposal`, and `infra-ops`, including the pre-authorized PR
+  workflow for `infra-ops`.
