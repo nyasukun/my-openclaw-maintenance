@@ -1,17 +1,22 @@
 {
   "id": "agent-command",
   "name": "Agent Command",
-  "description": "List configured purpose agents and run explicit /agent requests on the selected agent.",
+  "description": "List configured purpose agents, run explicit /agent requests, and switch channel sessions with /session.",
   "version": "0.1.0",
   "activation": {
     "onStartup": true,
     "onCommands": [
-      "agent"
+      "agent",
+      "session"
     ]
   },
   "commandAliases": [
     {
       "name": "agent",
+      "kind": "runtime-slash"
+    },
+    {
+      "name": "session",
       "kind": "runtime-slash"
     }
   ],

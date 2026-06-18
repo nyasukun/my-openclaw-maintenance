@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildSessionConversationRef,
+  buildSwitchableSessions,
   formatAgentList,
   formatAgentRunResult,
+  formatSessionList,
   handleAgentCommand,
+  handleSessionCommand,
   listPurposeAgents,
   normalizeAgentId,
   parseAgentCommand,
+  parseSessionCommand,
   resolveReplyTarget,
+  resolveSessionListAgentId,
   resolveTargetSessionKey,
+  selectSessionTarget,
   shouldBlockRouterTool,
 } from "./index.js";
 
@@ -151,5 +158,165 @@ describe("agent-command", () => {
     expect(shouldBlockRouterTool("router-agent", "sessions_send")).toBe(true);
     expect(shouldBlockRouterTool("router-agent", "sessions_spawn")).toBe(false);
     expect(shouldBlockRouterTool("foxcale-coding", "exec")).toBe(false);
+  });
+
+  it("parses /session list, switch, current, and clear commands", () => {
+    expect(parseSessionCommand(undefined)).toEqual({ action: "list", limit: 10 });
+    expect(parseSessionCommand("list 20")).toEqual({ action: "list", limit: 20 });
+    expect(parseSessionCommand("use 2")).toEqual({ action: "switch", selector: "2" });
+    expect(parseSessionCommand("2")).toEqual({ action: "switch", selector: "2" });
+    expect(parseSessionCommand("switch agent:router-agent:telegram:direct:5089072082")).toEqual({
+      action: "switch",
+      selector: "agent:router-agent:telegram:direct:5089072082",
+    });
+    expect(parseSessionCommand("current")).toEqual({ action: "current" });
+    expect(parseSessionCommand("clear")).toEqual({ action: "clear" });
+  });
+
+  it("resolves the session-list agent from the current session key", () => {
+    expect(resolveSessionListAgentId({ sessionKey: "agent:router-agent:telegram:direct:5089072082" })).toBe("router-agent");
+    expect(resolveSessionListAgentId({})).toBe("router-agent");
+  });
+
+  it("builds Telegram conversation refs for DMs and topics", () => {
+    expect(
+      buildSessionConversationRef({
+        accountId: "default",
+        channel: "telegram",
+        channelId: "5089072082",
+      }),
+    ).toEqual({
+      accountId: "default",
+      channel: "telegram",
+      conversationId: "5089072082",
+    });
+
+    expect(
+      buildSessionConversationRef({
+        channel: "telegram",
+        channelId: "-100123",
+        messageThreadId: 42,
+      }),
+    ).toEqual({
+      accountId: "default",
+      channel: "telegram",
+      conversationId: "-100123:topic:42",
+      parentConversationId: "-100123",
+    });
+  });
+
+  it("sorts switchable sessions and selects by list index", () => {
+    const sessions = buildSwitchableSessions(
+      [
+        {
+          sessionKey: "agent:router-agent:telegram:direct:old",
+          entry: { sessionId: "old", updatedAt: 1_000, model: "gpt-old" } as never,
+        },
+        {
+          sessionKey: "agent:router-agent:telegram:direct:new",
+          entry: { sessionId: "new", updatedAt: 2_000, model: "gpt-new", totalTokens: 12_345 } as never,
+        },
+        {
+          sessionKey: "agent:other:telegram:direct:hidden",
+          entry: { sessionId: "hidden", updatedAt: 3_000 } as never,
+        },
+      ],
+      "router-agent",
+      3_000,
+    );
+    expect(sessions.map((session) => session.sessionKey)).toEqual([
+      "agent:router-agent:telegram:direct:new",
+      "agent:router-agent:telegram:direct:old",
+    ]);
+    expect(selectSessionTarget("2", sessions)?.sessionKey).toBe("agent:router-agent:telegram:direct:old");
+    const output = formatSessionList(sessions, {
+      currentSessionKey: "agent:router-agent:telegram:direct:new",
+      limit: 10,
+      now: 3_000,
+    });
+    expect(output).toContain("最近のセッション:");
+    expect(output).toContain("[現在]");
+    expect(output).toContain("12k tok");
+  });
+
+  it("can filter switchable sessions to the current channel", () => {
+    const sessions = buildSwitchableSessions(
+      [
+        {
+          sessionKey: "agent:router-agent:telegram:direct:5089072082",
+          entry: { sessionId: "telegram", updatedAt: 3_000 } as never,
+        },
+        {
+          sessionKey: "agent:router-agent:contextfix-route-smoke-20260617",
+          entry: { sessionId: "smoke", updatedAt: 4_000 } as never,
+        },
+      ],
+      "router-agent",
+      5_000,
+      "telegram",
+    );
+    expect(sessions.map((session) => session.sessionKey)).toEqual(["agent:router-agent:telegram:direct:5089072082"]);
+  });
+
+  it("binds the current Telegram conversation to the selected session", async () => {
+    const binds: unknown[] = [];
+    const result = await handleSessionCommand(
+      {
+        args: "use 2",
+        channel: "telegram",
+        channelId: "5089072082",
+        config,
+        isAuthorizedSender: true,
+        senderId: "5089072082",
+        sessionKey: "agent:router-agent:telegram:direct:current",
+      },
+      {
+        now: () => 3_000,
+        listSessionEntries: () => [
+          {
+            sessionKey: "agent:router-agent:telegram:direct:current",
+            entry: { sessionId: "current", updatedAt: 3_000 } as never,
+          },
+          {
+            sessionKey: "agent:router-agent:telegram:direct:target",
+            entry: { sessionId: "target", updatedAt: 2_000 } as never,
+          },
+        ],
+        getBindingService: () => ({
+          bind: async (input) => {
+            binds.push(input);
+            return {
+              bindingId: "binding-1",
+              boundAt: 3_000,
+              conversation: input.conversation,
+              status: "active",
+              targetKind: input.targetKind,
+              targetSessionKey: input.targetSessionKey,
+            };
+          },
+          getCapabilities: () => ({
+            adapterAvailable: true,
+            bindSupported: true,
+            placements: ["current"],
+            unbindSupported: true,
+          }),
+          resolveByConversation: () => null,
+          unbind: async () => [],
+        }),
+      },
+    );
+    expect(result.text).toContain("セッションを切り替えました");
+    expect(binds).toMatchObject([
+      {
+        conversation: {
+          accountId: "default",
+          channel: "telegram",
+          conversationId: "5089072082",
+        },
+        placement: "current",
+        targetKind: "session",
+        targetSessionKey: "agent:router-agent:telegram:direct:target",
+      },
+    ]);
   });
 });
