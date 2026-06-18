@@ -11,11 +11,13 @@ const config = JSON.parse(readFileSync(configPath, "utf8"));
 
 const contractsDir = path.join(root, "config/openclaw-concern-lanes/lane-contracts");
 const routerContract = readFileSync(path.join(contractsDir, "router-agent.AGENTS.md"), "utf8");
+const routerSoul = readFileSync(path.join(contractsDir, "router-agent.SOUL.md"), "utf8");
 const infraContract = readFileSync(path.join(contractsDir, "infra-ops.AGENTS.md"), "utf8");
 const securityContract = readFileSync(path.join(contractsDir, "security-research.AGENTS.md"), "utf8");
 const proposalContract = readFileSync(path.join(contractsDir, "presales-proposal.AGENTS.md"), "utf8");
 
 const concernAgents = ["security-research", "presales-proposal", "infra-ops"];
+const routerAllowedAgents = [...concernAgents, "telegram-fable"];
 
 function agent(id) {
   const value = config.agents.list.find((candidate) => candidate.id === id);
@@ -36,9 +38,9 @@ describe("OpenClaw concern-lane snapshot", () => {
     }
   });
 
-  it("keeps router-agent constrained to the three concern lanes", () => {
+  it("keeps router-agent constrained to the concern lanes and artifact lane", () => {
     const router = agent("router-agent");
-    assert.deepEqual(router.subagents.allowAgents, concernAgents);
+    assert.deepEqual(router.subagents.allowAgents, routerAllowedAgents);
     assert.equal(router.subagents.requireAgentId, true);
     assert.equal(router.sandbox.mode, "all");
     assert.deepEqual(
@@ -93,6 +95,10 @@ describe("OpenClaw concern-lane snapshot", () => {
     assert.match(routerContract, /For follow-up requests such as "PRして"/);
     assert.match(routerContract, /prior user intent/);
     assert.match(routerContract, /branch\s+creation,\s+commit,\s+push,\s+and\s+PR\s+creation\s+are\s+authorized/);
+    assert.match(routerContract, /route to `telegram-fable`/);
+    assert.match(routerContract, /correct route-only answer is `telegram-fable`/);
+    assert.match(routerSoul, /`telegram-fable`/);
+    assert.match(routerSoul, /must return `telegram-fable`/);
     assert.match(infraContract, /PR workflow is pre-authorized/);
     assert.match(infraContract, /task brief as the source of customer intent/);
     assert.match(proposalContract, /approved copy and the constraints/);

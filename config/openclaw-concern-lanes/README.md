@@ -10,6 +10,9 @@ local OpenClaw host.
   - `security-research`
   - `presales-proposal`
   - `infra-ops`
+  - `telegram-fable`
+- `telegram-fable` owns previewable Artifact, Workspace Artifacts canvas,
+  interactive HTML/app, visual demo, and generated-file-by-URL deliverables.
 - Each lane has its own workspace, agentDir, session store, AGENTS.md lane
   contract, tool posture, and sandbox posture.
 - `infra-ops` is allowed to run the PR workflow without another approval when
@@ -43,6 +46,8 @@ install -m 700 config/openclaw-concern-lanes/bootstrap-runtime-secrets.sh \
   ~/.openclaw/workspace-infra-ops/.openclaw/bootstrap-runtime-secrets.sh
 install -m 600 config/openclaw-concern-lanes/lane-contracts/router-agent.AGENTS.md \
   ~/.openclaw/workspaces/router-agent/AGENTS.md
+install -m 600 config/openclaw-concern-lanes/lane-contracts/router-agent.SOUL.md \
+  ~/.openclaw/workspaces/router-agent/SOUL.md
 install -m 600 config/openclaw-concern-lanes/lane-contracts/infra-ops.AGENTS.md \
   ~/.openclaw/workspace-infra-ops/AGENTS.md
 install -m 600 config/openclaw-concern-lanes/lane-contracts/security-research.AGENTS.md \

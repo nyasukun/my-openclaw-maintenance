@@ -93,7 +93,8 @@ or auth/session state you want to preserve.
   `agents.defaults.subagents.delegationMode`, and `messages.queue`.
 - Existing `router-agent` remains the Telegram/Slack binding target, but its
   concern-routing overlay and `subagents.allowAgents` were updated to delegate
-  only to `security-research`, `presales-proposal`, and `infra-ops`.
+  to `security-research`, `presales-proposal`, `infra-ops`, and the existing
+  `telegram-fable` Artifact lane.
 - The 2026-06-17 context/tool-inheritance fix changed `router-agent` to a
   sandboxed coordinator with a union allowlist, because child subagents inherit
   requester tool restrictions. It also sandboxed `security-research` and

@@ -70,5 +70,5 @@ Operational notes:
   the deployed OpenClaw-managed skill copy.
 - [OpenClaw concern lanes](config/openclaw-concern-lanes/README.md): current
   Telegram/Slack `router-agent` setup with `security-research`,
-  `presales-proposal`, and `infra-ops`, including the pre-authorized PR
-  workflow for `infra-ops`.
+  `presales-proposal`, `infra-ops`, and the `telegram-fable` Artifact lane,
+  including the pre-authorized PR workflow for `infra-ops`.

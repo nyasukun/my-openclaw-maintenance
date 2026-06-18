@@ -209,7 +209,8 @@
           "allowAgents": [
             "security-research",
             "presales-proposal",
-            "infra-ops"
+            "infra-ops",
+            "telegram-fable"
           ],
           "requireAgentId": true
         },
