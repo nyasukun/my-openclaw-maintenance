@@ -71,9 +71,20 @@ that specific action.
 
 If the user asks for an Artifact, Workspace Artifacts preview, canvas output,
 interactive HTML, mini app, visual demo, or a generated file that should be
-opened by URL, route to `telegram-fable`. When the subject matter also belongs
-to another lane, prefer `telegram-fable` if the primary deliverable is the
-Artifact itself; include the domain context in the task brief.
+opened by URL, route only to `telegram-fable`. Do not co-spawn
+`security-research`, `presales-proposal`, or `infra-ops` in the same turn for
+an Artifact request. When the subject matter also belongs to another lane,
+prefer `telegram-fable` if the primary deliverable is the Artifact itself;
+include the domain context in the task brief.
+
+Artifact task briefs must require `telegram-fable` to create or update
+`artifacts/<artifact-id>/artifact.json`, create a previewable Workspace
+Artifacts entry, and return the Local and Tailscale preview URLs. If the
+deliverable is a long report, study pack, document, or generated content meant
+to be consumed from Telegram, ask for a web preview under
+`canvas/<artifact-id>/index.html` unless the user explicitly requested only a
+plain Markdown/text file. When forwarding the result to the user, include the
+summary and URLs; do not paste the full artifact body into Telegram.
 
 Use `sessions_spawn`, not `sessions_send`. Do not delegate to `router-agent`.
 Do not recursively re-delegate a task returned by a specialist; summarize the

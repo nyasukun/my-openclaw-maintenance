@@ -13,11 +13,41 @@ When the user asks to create, revise, preview, or continue an artifact:
 - Keep artifact metadata in `workspace/artifacts/<artifact-id>/artifact.json`.
 - For web artifacts, mirror runnable files to `workspace/canvas/<artifact-id>/`.
 - Return a short summary and preview URLs.
+- If the user explicitly asks for an Artifact, Workspace Artifacts preview,
+  canvas, or URL-openable result, the response must include a Gateway URL that
+  opens the artifact through the Workspace Artifacts plugin.
+- Do not paste the full artifact body into chat when a preview URL is the
+  requested deliverable.
 - Never overwrite an existing artifact unless the user clearly asks for a revision.
+
+## Fast Path for New Web Artifacts
+
+When the user asks for a new small web/HTML Artifact and gives an explicit
+`artifact-id`, do not browse the workspace first. Create the artifact directly:
+
+1. `mkdir -p artifacts/<artifact-id> canvas/<artifact-id>`
+2. write `artifacts/<artifact-id>/index.html` with a POSIX-safe heredoc
+3. copy or write the same `index.html` to `canvas/<artifact-id>/index.html`
+4. write `artifacts/<artifact-id>/artifact.json`
+5. return the Workspace Artifacts URL
+
+Do not use the shell built-in `test` for Artifact existence checks in OpenClaw
+sandboxes; sandbox policy may decline that command. If you must inspect, use
+`find`, `ls`, or `sed` on a narrow path under `/workspace`, then continue.
+Avoid broad discovery commands such as `rg --files /workspace` or
+`find /home/yasu/.openclaw` for simple Artifact creation.
 
 ## Paths
 
 Resolve the OpenClaw workspace root before writing. Prefer the configured OpenClaw workspace when available; otherwise use `~/.openclaw/workspace`.
+
+When running inside an OpenClaw sandbox, host paths such as
+`~/.openclaw/skills/<skill>/SKILL.md` may not exist. If you need to inspect this
+skill file from the sandbox, read
+`/workspace/.openclaw/sandbox-skills/skills/workspace-artifact-builder/SKILL.md`
+first. Do not spend time searching the whole filesystem for the skill file when
+the current task can be completed from the instructions already injected into
+the prompt.
 
 Use these paths relative to the workspace root:
 
@@ -64,6 +94,21 @@ Set `type` to:
 8. Run the quality checks below and revise obvious problems before responding.
 9. Return a concise summary and preview URLs.
 
+Use the available file-writing tool directly when it supports full file
+contents. If the runtime only exposes shell-style commands, create artifact
+files with POSIX-safe heredocs under the allowed artifact paths. Do not call an
+`apply_patch` tool for new artifact files unless the tool schema clearly
+includes the complete file contents to write; an empty add-file patch only
+creates a failed run and does not satisfy the Artifact request.
+
+When the user says "Artifact" for a long report, study pack, generated content,
+or other result meant to be opened from Telegram or Slack, prefer a web
+artifact with a readable `index.html` preview and mirror it to
+`canvas/<artifact-id>/`. Optionally keep Markdown or data source files under
+`artifacts/<artifact-id>/`, but make the primary entry previewable. Use
+`type: "document"` or `type: "data"` only when the user explicitly asks for a
+plain Markdown/text/data file or when a web preview would not add value.
+
 ## Quality Checks
 
 Treat artifacts as user-visible deliverables, not rough code snippets.
@@ -101,6 +146,21 @@ Tailscale: [Open from phone](<tailscale-serve-origin>/plugins/workspace-artifact
 ```
 
 Resolve `<gateway-port>` from OpenClaw config or status; default to `18789` when not configured. Resolve `<tailscale-serve-origin>` from current OpenClaw status/config when Tailscale Serve is enabled. If no Tailscale Serve origin is configured, still provide the Local URL and state that the Tailscale URL is unavailable.
+
+## Document and Data Artifacts
+
+If the artifact is intentionally `type: "document"` or `type: "data"` and no
+canvas mirror exists, the Workspace Artifacts plugin can still open the source
+entry directly. Return URLs that point at `artifacts/<artifact-id>/<entry>`:
+
+```text
+Local: [Open locally](http://127.0.0.1:<gateway-port>/plugins/workspace-artifacts/?file=artifacts/<artifact-id>/<entry>) - http://127.0.0.1:<gateway-port>/plugins/workspace-artifacts/?file=artifacts/<artifact-id>/<entry>
+Tailscale: [Open from phone](<tailscale-serve-origin>/plugins/workspace-artifacts/?file=artifacts/<artifact-id>/<entry>) - <tailscale-serve-origin>/plugins/workspace-artifacts/?file=artifacts/<artifact-id>/<entry>
+```
+
+Use document/data URLs only as the fallback for intentionally non-web
+artifacts. For a user-facing "Artifact" request without a plain-file
+constraint, create the web preview instead.
 
 ## Revision Rules
 
@@ -141,5 +201,8 @@ Local: [Open locally](http://127.0.0.1:<gateway-port>/plugins/workspace-artifact
 Tailscale: [Open from phone](<tailscale-serve-origin>/plugins/workspace-artifacts/?file=canvas/<artifact-id>/index.html) - <tailscale-serve-origin>/plugins/workspace-artifacts/?file=canvas/<artifact-id>/index.html
 Entry: canvas/<artifact-id>/index.html
 ```
+
+For intentional document or data artifacts, replace the `canvas/.../index.html`
+paths above with `artifacts/<artifact-id>/<entry>`.
 
 Include any important limitation, such as "static preview only" or "Tailscale URL unavailable because Serve is not configured".

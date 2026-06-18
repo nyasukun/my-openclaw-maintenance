@@ -160,17 +160,54 @@
           "workspace-artifact-builder"
         ],
         "tools": {
-          "alsoAllow": [
+          "allow": [
+            "read",
+            "write",
+            "edit",
+            "apply_patch",
+            "exec",
+            "process",
             "web_search",
             "web_fetch"
           ],
+          "deny": [
+            "sessions_send",
+            "sessions_spawn",
+            "browser"
+          ],
+          "exec": {
+            "host": "sandbox",
+            "mode": "full"
+          },
           "sandbox": {
             "tools": {
-              "alsoAllow": [
+              "allow": [
+                "read",
+                "write",
+                "edit",
+                "apply_patch",
+                "exec",
+                "process",
                 "web_search",
                 "web_fetch"
+              ],
+              "deny": [
+                "sessions_send",
+                "sessions_spawn",
+                "browser"
               ]
             }
+          }
+        },
+        "sandbox": {
+          "docker": {
+            "setupCommand": "if [ -f /workspace/.openclaw/bootstrap-runtime-secrets.sh ]; then sh /workspace/.openclaw/bootstrap-runtime-secrets.sh; fi\nif [ ! -e \"$HOME/.openclaw/skills\" ]; then mkdir -p \"$HOME/.openclaw\" && ln -s /workspace/.openclaw/sandbox-skills/skills \"$HOME/.openclaw/skills\"; fi",
+            "binds": [
+              "/home/yasu/.openclaw/runtime-secrets:/run/openclaw-secrets:ro",
+              "/home/yasu/.openclaw/skills:/home/yasu/.openclaw/skills:ro",
+              "/home/yasu/.openclaw/skills:/home/ubuntu/.openclaw/skills:ro",
+              "/home/yasu/.openclaw/workspace:/home/yasu/.openclaw/workspace"
+            ]
           }
         }
       },

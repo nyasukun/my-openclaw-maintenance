@@ -15,6 +15,14 @@ const routerSoul = readFileSync(path.join(contractsDir, "router-agent.SOUL.md"),
 const infraContract = readFileSync(path.join(contractsDir, "infra-ops.AGENTS.md"), "utf8");
 const securityContract = readFileSync(path.join(contractsDir, "security-research.AGENTS.md"), "utf8");
 const proposalContract = readFileSync(path.join(contractsDir, "presales-proposal.AGENTS.md"), "utf8");
+const artifactBuilderSkill = readFileSync(
+  path.join(root, "skills/workspace-artifact-builder/SKILL.md"),
+  "utf8"
+);
+const skillDeploymentDoc = readFileSync(
+  path.join(root, "docs/openclaw-skill-deployment.md"),
+  "utf8"
+);
 
 const concernAgents = ["security-research", "presales-proposal", "infra-ops"];
 const routerAllowedAgents = [...concernAgents, "telegram-fable"];
@@ -95,14 +103,70 @@ describe("OpenClaw concern-lane snapshot", () => {
     assert.match(routerContract, /For follow-up requests such as "PRして"/);
     assert.match(routerContract, /prior user intent/);
     assert.match(routerContract, /branch\s+creation,\s+commit,\s+push,\s+and\s+PR\s+creation\s+are\s+authorized/);
-    assert.match(routerContract, /route to `telegram-fable`/);
+    assert.match(routerContract, /route only to `telegram-fable`/);
+    assert.match(routerContract, /Do not co-spawn/);
+    assert.match(routerContract, /return the Local and Tailscale preview URLs/);
+    assert.match(routerContract, /do not paste the full artifact body/);
     assert.match(routerContract, /correct route-only answer is `telegram-fable`/);
     assert.match(routerSoul, /`telegram-fable`/);
     assert.match(routerSoul, /must return `telegram-fable`/);
+    assert.match(routerSoul, /delegate only to `telegram-fable`/);
     assert.match(infraContract, /PR workflow is pre-authorized/);
     assert.match(infraContract, /task brief as the source of customer intent/);
     assert.match(proposalContract, /approved copy and the constraints/);
     assert.match(securityContract, /Do not use shell/);
+  });
+
+  it("requires artifact skills to return Workspace Artifacts URLs", () => {
+    const telegramFable = agent("telegram-fable");
+    assert.ok(
+      telegramFable.sandbox.docker.binds.includes(
+        "/home/yasu/.openclaw/skills:/home/yasu/.openclaw/skills:ro"
+      )
+    );
+    assert.ok(
+      telegramFable.sandbox.docker.binds.includes(
+        "/home/yasu/.openclaw/skills:/home/ubuntu/.openclaw/skills:ro"
+      )
+    );
+    assert.ok(
+      telegramFable.sandbox.docker.binds.includes(
+        "/home/yasu/.openclaw/workspace:/home/yasu/.openclaw/workspace"
+      )
+    );
+    assert.deepEqual(telegramFable.tools.exec, { host: "sandbox", mode: "full" });
+    for (const tool of ["read", "write", "edit", "apply_patch", "exec", "process"]) {
+      assert.ok(telegramFable.tools.allow.includes(tool), `telegram-fable must allow ${tool}`);
+      assert.ok(
+        telegramFable.tools.sandbox.tools.allow.includes(tool),
+        `telegram-fable sandbox must allow ${tool}`
+      );
+    }
+    assert.ok(telegramFable.tools.deny.includes("sessions_spawn"));
+    assert.ok(telegramFable.tools.sandbox.tools.deny.includes("sessions_spawn"));
+    assert.match(
+      telegramFable.sandbox.docker.setupCommand,
+      /if \[ ! -e "\$HOME\/\.openclaw\/skills" \]/
+    );
+    assert.match(
+      telegramFable.sandbox.docker.setupCommand,
+      /ln -s \/workspace\/\.openclaw\/sandbox-skills\/skills "\$HOME\/\.openclaw\/skills"/
+    );
+    assert.match(artifactBuilderSkill, /Gateway URL/);
+    assert.match(artifactBuilderSkill, /Fast Path for New Web Artifacts/);
+    assert.match(artifactBuilderSkill, /do not browse the workspace first/);
+    assert.match(artifactBuilderSkill, /Do not use the shell built-in `test`/);
+    assert.match(artifactBuilderSkill, /Do not paste the full artifact body/);
+    assert.match(artifactBuilderSkill, /prefer a web\s+artifact/);
+    assert.match(artifactBuilderSkill, /artifacts\/<artifact-id>\/<entry>/);
+    assert.match(artifactBuilderSkill, /POSIX-safe heredocs/);
+    assert.match(artifactBuilderSkill, /empty add-file patch/);
+    assert.match(artifactBuilderSkill, /sandbox-skills/);
+    assert.match(artifactBuilderSkill, /Do not spend time searching the whole filesystem/);
+    assert.match(skillDeploymentDoc, /workspace\/agent `AGENTS\.md`/);
+    assert.match(skillDeploymentDoc, /sandbox-skills\/skills\/workspace-artifact-builder\/SKILL\.md/);
+    assert.match(skillDeploymentDoc, /do not search the whole filesystem/);
+    assert.match(skillDeploymentDoc, /\/workspace\/canvas\/<artifact-id>\//);
   });
 
   it("captures the queue and plugin settings required by the rollout", () => {

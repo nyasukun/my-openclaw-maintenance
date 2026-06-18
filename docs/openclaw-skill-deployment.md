@@ -50,3 +50,49 @@ openclaw gateway restart
 
 Expected result: `workspace-artifact-builder` is `modelVisible: true` for the
 target agent.
+
+For sandboxed OpenClaw agents, also keep an agent/workspace instruction that
+prevents host-path skill lookup failures before the skill file is loaded. The
+instruction should say:
+
+- if `~/.openclaw/skills/workspace-artifact-builder/SKILL.md` is unavailable in
+  sandbox, read
+  `/workspace/.openclaw/sandbox-skills/skills/workspace-artifact-builder/SKILL.md`
+  first;
+- if the sandbox skill file is unavailable, continue from the injected skill
+  summary and do not search the whole filesystem;
+- write Artifact source files under `/workspace/artifacts/<artifact-id>/` and
+  web previews under `/workspace/canvas/<artifact-id>/`;
+- use POSIX-safe heredocs or a complete file-write tool call, never an empty
+  `apply_patch` add-file call;
+- return the Workspace Artifacts Local URL instead of pasting the artifact body.
+
+This guard belongs in the workspace/agent `AGENTS.md`, not only inside
+`SKILL.md`, because the model may need the sandbox path before it can open the
+skill file.
+
+For the Artifact lane, also expose the deployed skill directory read-only to
+sandbox paths that models commonly try when following the injected skill
+location, and expose the same workspace at its configured absolute path because
+the skill may resolve `/home/yasu/.openclaw/workspace` before writing:
+
+```json
+"sandbox": {
+  "docker": {
+    "binds": [
+      "/home/yasu/.openclaw/runtime-secrets:/run/openclaw-secrets:ro",
+      "/home/yasu/.openclaw/skills:/home/yasu/.openclaw/skills:ro",
+      "/home/yasu/.openclaw/skills:/home/ubuntu/.openclaw/skills:ro",
+      "/home/yasu/.openclaw/workspace:/home/yasu/.openclaw/workspace"
+    ]
+  }
+}
+```
+
+After changing sandbox binds, restart Gateway and recreate the affected
+agent's sandbox containers:
+
+```bash
+openclaw gateway restart
+openclaw sandbox recreate --agent telegram-fable --force
+```
