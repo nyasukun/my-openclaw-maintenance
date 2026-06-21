@@ -72,3 +72,10 @@ Operational notes:
   Telegram/Slack `router-agent` setup with `security-research`,
   `presales-proposal`, `infra-ops`, and the `telegram-fable` Artifact lane,
   including the pre-authorized PR workflow for `infra-ops`.
+- [Agent system overview](docs/agent-system-overview.md): whole-system mermaid
+  diagrams of channel ingress, orchestration/routing, and the per-vault
+  authorization boundary.
+- [Agent authorization & vault model](docs/agent-authz-vault-model.md):
+  least-privilege per-1Password-vault authz for each sub-agent, enforced at the
+  host boundary by per-agent runtime-secret snapshots (OWASP LLM06 / NIST
+  800-207 / 1Password guidance).

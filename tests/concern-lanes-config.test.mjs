@@ -169,6 +169,11 @@ describe("OpenClaw concern-lane snapshot", () => {
     assert.match(skillDeploymentDoc, /\/workspace\/canvas\/<artifact-id>\//);
   });
 
+  it("runs the unattended heartbeat agent with a full sandbox exec policy so it never blocks on approval", () => {
+    const heartbeat = agent("heartbeat");
+    assert.deepEqual(heartbeat.tools.exec, { host: "sandbox", mode: "full" });
+  });
+
   it("captures the queue and plugin settings required by the rollout", () => {
     assert.deepEqual(config.tools.agentToAgent, { enabled: false });
     assert.deepEqual(config.messages.queue, {
