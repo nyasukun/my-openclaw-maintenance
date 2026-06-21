@@ -32,6 +32,13 @@ local OpenClaw host.
 - `bootstrap-runtime-secrets.sh`: sandbox bootstrap script for GitHub/gh runtime
   credentials. The script reads the mounted runtime secret snapshot at container
   setup time; it does not contain secret values.
+- `vault-access-map.json`: authoritative per-agent 1Password vault authorization
+  (least privilege). Each agent maps to the vault(s) it may read plus declarative
+  runtime-secret grants. See [`docs/agent-authz-vault-model.md`](../../docs/agent-authz-vault-model.md).
+- `materialize-runtime-secrets.js`: writes a per-agent runtime-secret snapshot
+  (`runtime-secrets/<agent>/local.json`) from only that agent's authorized
+  vaults, so each sandbox mounts only its own secrets. Run with `--dry-run`
+  first; resolves values via the 1Password `op` CLI.
 - `ROLLBACK.md`: local rollback commands and backup path notes for the rollout.
 
 ## Apply
@@ -54,9 +61,23 @@ install -m 600 config/openclaw-concern-lanes/lane-contracts/security-research.AG
   ~/.openclaw/workspace-security-research/AGENTS.md
 install -m 600 config/openclaw-concern-lanes/lane-contracts/presales-proposal.AGENTS.md \
   ~/.openclaw/workspace-presales-proposal/AGENTS.md
+# Per-agent secret isolation: install the vault map + materializer, then write
+# per-agent runtime-secret snapshots before recreating sandboxes.
+install -m 600 config/openclaw-concern-lanes/vault-access-map.json \
+  ~/.openclaw/secrets/vault-access-map.json
+install -m 700 config/openclaw-concern-lanes/materialize-runtime-secrets.js \
+  ~/.openclaw/secrets/materialize-runtime-secrets.js
+OPENCLAW_VAULT_ACCESS_MAP=~/.openclaw/secrets/vault-access-map.json \
+  node ~/.openclaw/secrets/materialize-runtime-secrets.js --dry-run
+OPENCLAW_VAULT_ACCESS_MAP=~/.openclaw/secrets/vault-access-map.json \
+  node ~/.openclaw/secrets/materialize-runtime-secrets.js
 openclaw config validate
 openclaw gateway restart
+openclaw sandbox recreate --all --force
 ```
+
+See [`docs/agent-authz-vault-model.md`](../../docs/agent-authz-vault-model.md)
+for the per-vault authorization rationale and the manual 1Password vault steps.
 
 ## Verification
 
@@ -68,7 +89,10 @@ openclaw channels status --probe
 openclaw exec-policy show --agent infra-ops --json
 openclaw sandbox recreate --agent infra-ops --force
 openclaw doctor
-node --test tests/concern-lanes-config.test.mjs
+node --test tests/concern-lanes-config.test.mjs tests/vault-access-map.test.mjs
+# infra-ops holds the GitHub token; the non-coding lanes must not:
+openclaw exec --agent infra-ops -- sh -lc 'echo GITHUB_TOKEN=${GITHUB_TOKEN:+present}'
+openclaw exec --agent telegram-fable -- sh -lc 'echo GITHUB_TOKEN=${GITHUB_TOKEN:-absent}'
 ```
 
 Expected `infra-ops` exec policy:

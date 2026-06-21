@@ -1,0 +1,131 @@
+{
+  "version": 2,
+  "model": "concern-lanes",
+  "supersedes": "config/openclaw-agent-project/vault-map.json",
+  "summary": "Authoritative per-agent 1Password vault authorization for the deployed concern-lane system. Each agent is granted only the vault(s) its concern requires. Authorization is enforced at the host boundary by per-agent runtime-secret snapshots (materialize-runtime-secrets.js), not by prompt-level policy text, so a prompt-injected or misbehaving agent cannot read another lane's credentials.",
+  "principles": {
+    "least_privilege": "Grant each agent the minimum vault set for its concern; do not grant access to more vaults than needed.",
+    "complete_mediation": "Enforce credential isolation in the runtime (per-agent secret snapshot + per-agent read-only bind mount), never by asking the model to honor a must-not-read rule.",
+    "zero_trust": "Treat every lane as untrusted regardless of being on the same host; scope credentials per agent and per session.",
+    "sources": [
+      "OWASP Top 10 for LLM Applications LLM06:2025 Excessive Agency — minimize extension permissions; execute extensions in the user's security scope with minimum privileges; implement authorization in downstream systems (complete mediation). https://genai.owasp.org/llmrisk/llm062025-excessive-agency/",
+      "NIST SP 800-207 Zero Trust Architecture — least-privilege, per-session/per-request access; all communication secured regardless of network location. https://csrc.nist.gov/pubs/sp/800/207/final",
+      "1Password CLI / service-account best practices — use dedicated vaults that are properly scoped; do not grant access to more vaults than needed. https://www.1password.dev/cli/best-practices/"
+    ]
+  },
+  "common_vault": "openclaw-pod",
+  "agents": {
+    "main": {
+      "status": "active",
+      "role": "system-default",
+      "vaults": ["openclaw-pod"]
+    },
+    "hard": {
+      "status": "active",
+      "role": "system-default",
+      "vaults": ["openclaw-pod"]
+    },
+    "long": {
+      "status": "active",
+      "role": "system-default",
+      "vaults": ["openclaw-pod"]
+    },
+    "heartbeat": {
+      "status": "active",
+      "role": "system-default-unattended",
+      "vaults": ["openclaw-pod"]
+    },
+    "router-agent": {
+      "status": "active",
+      "role": "orchestrator",
+      "vaults": ["openclaw-pod", "openclaw-router"],
+      "must_not_read": [
+        "openclaw-security-research",
+        "openclaw-presales-proposal",
+        "openclaw-infra-ops",
+        "openclaw-telegram-fable"
+      ],
+      "note": "User-facing orchestrator. Delegates work to lanes; must never hold a lane's domain credentials."
+    },
+    "security-research": {
+      "status": "active",
+      "role": "concern-lane",
+      "vaults": ["openclaw-pod", "openclaw-security-research"],
+      "note": "Read/write/web only, no exec. No GitHub or shell credentials."
+    },
+    "presales-proposal": {
+      "status": "active",
+      "role": "concern-lane",
+      "vaults": ["openclaw-pod", "openclaw-presales-proposal"],
+      "note": "Read/write/apply_patch only, no exec. No GitHub or shell credentials."
+    },
+    "infra-ops": {
+      "status": "active",
+      "role": "concern-lane",
+      "vaults": ["openclaw-pod", "openclaw-infra-ops"],
+      "note": "Only lane with full sandbox exec and bridge network. Holds the PR-workflow GitHub PAT and nothing else."
+    },
+    "telegram-fable": {
+      "status": "active",
+      "role": "artifact-lane",
+      "vaults": ["openclaw-pod", "openclaw-telegram-fable"],
+      "note": "Workspace-artifact builder. Needs gateway/preview config from its own vault; no GitHub credentials."
+    },
+    "work-cisco": { "status": "retired-kept", "role": "legacy-purpose-agent", "vaults": ["openclaw-pod", "openclaw-work-cisco"] },
+    "azabu-corporate": { "status": "retired-kept", "role": "legacy-purpose-agent", "vaults": ["openclaw-pod", "openclaw-azabu-corporate"] },
+    "personal": { "status": "retired-kept", "role": "legacy-purpose-agent", "vaults": ["openclaw-pod", "openclaw-personal"] },
+    "coding": { "status": "retired-kept", "role": "legacy-purpose-agent", "vaults": ["openclaw-pod", "openclaw-coding"] },
+    "foxcale-advisor": { "status": "retired-kept", "role": "legacy-purpose-agent", "vaults": ["openclaw-pod", "openclaw-foxcale-advisor"] },
+    "foxcale-coding": { "status": "retired-kept", "role": "legacy-purpose-agent", "vaults": ["openclaw-pod", "openclaw-foxcale-coding"] },
+    "learning-kb": { "status": "retired-kept", "role": "legacy-purpose-agent", "vaults": ["openclaw-pod", "openclaw-learning-kb"] }
+  },
+  "runtime_secret_grants": [
+    {
+      "name": "GITHUB_TOKEN",
+      "agents": ["infra-ops"],
+      "vault": "openclaw-infra-ops",
+      "vault_fallbacks": ["openclaw-azabu-corporate"],
+      "item": "github",
+      "field": "token",
+      "purpose": "infra-ops pre-authorized PR workflow (branch/commit/push/PR)"
+    },
+    {
+      "name": "GITHUB_PAT_F_PROJECT",
+      "agents": ["foxcale-coding"],
+      "vault": "openclaw-foxcale-coding",
+      "item": "github",
+      "field": "pat_f_project",
+      "purpose": "foxcale project GitHub access (legacy purpose-agent)"
+    },
+    {
+      "name": "GITHUB_TOKEN",
+      "agents": ["azabu-corporate"],
+      "vault": "openclaw-azabu-corporate",
+      "item": "github",
+      "field": "token",
+      "purpose": "general GitHub access (legacy purpose-agent model; vault owner only)"
+    }
+  ],
+  "vaults_to_create": [
+    {
+      "vault": "openclaw-infra-ops",
+      "reason": "Move the PR-workflow GitHub PAT out of openclaw-azabu-corporate so infra-ops needs no corporate vault. Until created, the grant falls back to openclaw-azabu-corporate.",
+      "items": ["github (field: token)"]
+    },
+    {
+      "vault": "openclaw-security-research",
+      "reason": "Optional dedicated vault for research API keys (e.g. threat-intel feeds) so they are not placed in the common vault.",
+      "items": []
+    },
+    {
+      "vault": "openclaw-presales-proposal",
+      "reason": "Optional dedicated vault for proposal-tooling credentials.",
+      "items": []
+    },
+    {
+      "vault": "openclaw-telegram-fable",
+      "reason": "Optional dedicated vault for artifact gateway/preview credentials.",
+      "items": []
+    }
+  ]
+}

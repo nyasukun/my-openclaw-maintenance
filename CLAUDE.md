@@ -103,11 +103,16 @@ edits inside the markers are overwritten).
 ### Secrets model (never commit values)
 
 Secrets resolve through a 1Password exec provider using namespaced SecretRefs
-(`common/<item>/<field>`, `<agent>/<item>/<field>`). Runtime credentials are
-written to a host snapshot and bind-mounted read-only into each Docker sandbox at
-`/run/openclaw-secrets/local.json`; a `bootstrap-runtime-secrets.sh` setup
-command exposes them via `BASH_ENV`. The repo only ever stores **source
-metadata** (vault/item/field names), never secret values. Shell snippets must do
+(`common/<item>/<field>`, `<agent>/<item>/<field>`). Authorization is **per
+1Password vault, per agent**: `config/openclaw-concern-lanes/vault-access-map.json`
+is the source of truth, and `materialize-runtime-secrets.js` writes a **per-agent**
+snapshot (`runtime-secrets/<agent>/local.json`) containing only that agent's
+authorized vaults. Each sandbox bind-mounts only its own snapshot read-only at
+`/run/openclaw-secrets/local.json`; a `bootstrap-runtime-secrets.sh` setup command
+exposes it via `BASH_ENV`. The repo only ever stores **source metadata**
+(vault/item/field names), never secret values. Rationale + sources:
+`docs/agent-authz-vault-model.md`. Do not reintroduce a single shared snapshot
+mounted into all sandboxes (`tests/vault-access-map.test.mjs` guards this). Shell snippets must do
 redacted checks (`TOKEN=present`, not the value). `.gitignore` excludes
 `.openclaw/`, `.env*`, and logs — keep it that way.
 
