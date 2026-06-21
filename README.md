@@ -69,9 +69,10 @@ Operational notes:
   skill sources generic, then inject the current Tailscale Serve URL only into
   the deployed OpenClaw-managed skill copy.
 - [OpenClaw concern lanes](config/openclaw-concern-lanes/README.md): current
-  Telegram/Slack `router-agent` setup with `security-research`,
-  `presales-proposal`, `infra-ops`, and the `telegram-fable` Artifact lane,
-  including the pre-authorized PR workflow for `infra-ops`.
+  Telegram/Slack `router-agent` setup whose lanes are the operator's five
+  concerns (`azabu-corporate` ★1, `foxcale-advisor`/`foxcale-coding` ★2,
+  `work-cisco`, `learning-kb`, `personal`) plus the `telegram-fable` Artifact
+  lane, with ★1/★2 GitHub-token isolation and the per-concern PR workflow.
 - [Agent system overview](docs/agent-system-overview.md): whole-system mermaid
   diagrams of channel ingress, orchestration/routing, and the per-vault
   authorization boundary.

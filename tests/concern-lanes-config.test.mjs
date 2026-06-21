@@ -12,9 +12,9 @@ const config = JSON.parse(readFileSync(configPath, "utf8"));
 const contractsDir = path.join(root, "config/openclaw-concern-lanes/lane-contracts");
 const routerContract = readFileSync(path.join(contractsDir, "router-agent.AGENTS.md"), "utf8");
 const routerSoul = readFileSync(path.join(contractsDir, "router-agent.SOUL.md"), "utf8");
-const infraContract = readFileSync(path.join(contractsDir, "infra-ops.AGENTS.md"), "utf8");
-const securityContract = readFileSync(path.join(contractsDir, "security-research.AGENTS.md"), "utf8");
-const proposalContract = readFileSync(path.join(contractsDir, "presales-proposal.AGENTS.md"), "utf8");
+const azabuContract = readFileSync(path.join(contractsDir, "azabu-corporate.AGENTS.md"), "utf8");
+const foxcaleCodingContract = readFileSync(path.join(contractsDir, "foxcale-coding.AGENTS.md"), "utf8");
+const workCiscoContract = readFileSync(path.join(contractsDir, "work-cisco.AGENTS.md"), "utf8");
 const artifactBuilderSkill = readFileSync(
   path.join(root, "skills/workspace-artifact-builder/SKILL.md"),
   "utf8"
@@ -24,8 +24,18 @@ const skillDeploymentDoc = readFileSync(
   "utf8"
 );
 
-const concernAgents = ["security-research", "presales-proposal", "infra-ops"];
+// The operator's five concerns, expressed as concern agents (foxcale is split
+// into advisor + coding). telegram-fable is the artifact lane, also delegable.
+const concernAgents = [
+  "work-cisco",
+  "azabu-corporate",
+  "foxcale-advisor",
+  "foxcale-coding",
+  "learning-kb",
+  "personal"
+];
 const routerAllowedAgents = [...concernAgents, "telegram-fable"];
+const DELETED_AGENTS = ["coding", "security-research", "presales-proposal", "infra-ops"];
 
 function agent(id) {
   const value = config.agents.list.find((candidate) => candidate.id === id);
@@ -46,7 +56,7 @@ describe("OpenClaw concern-lane snapshot", () => {
     }
   });
 
-  it("keeps router-agent constrained to the concern lanes and artifact lane", () => {
+  it("keeps router-agent constrained to the concern agents and artifact lane", () => {
     const router = agent("router-agent");
     assert.deepEqual(router.subagents.allowAgents, routerAllowedAgents);
     assert.equal(router.subagents.requireAgentId, true);
@@ -61,60 +71,60 @@ describe("OpenClaw concern-lane snapshot", () => {
     assert.ok(router.tools.deny.includes("browser"));
   });
 
-  it("gives infra-ops enough sandboxed authority for pre-authorized PR workflow", () => {
-    const infra = agent("infra-ops");
-    assert.equal(infra.workspace, "/home/yasu/.openclaw/workspace-infra-ops");
-    assert.equal(infra.agentDir, "/home/yasu/.openclaw/agents/infra-ops/agent");
-    assert.equal(infra.sandbox.mode, "all");
-    assert.equal(infra.sandbox.workspaceAccess, "rw");
-    assert.equal(infra.sandbox.scope, "agent");
-    assert.equal(infra.sandbox.docker.network, "bridge");
-    assert.match(infra.sandbox.docker.setupCommand, /bootstrap-runtime-secrets\.sh/);
-    assert.deepEqual(infra.tools.exec, { host: "auto", mode: "full" });
-    assert.deepEqual(
-      ["read", "write", "edit", "apply_patch", "exec", "process"].filter(
-        (tool) => !infra.tools.allow.includes(tool)
-      ),
-      []
-    );
-    assert.ok(infra.tools.deny.includes("sessions_send"));
-    assert.ok(infra.tools.deny.includes("sessions_spawn"));
-  });
-
-  it("keeps specialist leaves from creating delegation loops", () => {
-    for (const id of concernAgents) {
-      const current = agent(id);
-      assert.ok(current.tools.deny.includes("sessions_send"), `${id} must deny sessions_send`);
-      assert.ok(current.tools.deny.includes("sessions_spawn"), `${id} must deny sessions_spawn`);
+  it("retires the abstract lanes and the generic coding agent", () => {
+    const ids = config.agents.list.map((a) => a.id);
+    for (const gone of DELETED_AGENTS) {
+      assert.ok(!ids.includes(gone), `${gone} must be removed from agents.list`);
+    }
+    const router = agent("router-agent");
+    for (const gone of DELETED_AGENTS) {
+      assert.ok(
+        !router.subagents.allowAgents.includes(gone),
+        `router-agent must not delegate to removed agent ${gone}`
+      );
     }
   });
 
-  it("keeps research and proposal lanes scoped to their minimum tool surfaces", () => {
-    const security = agent("security-research");
-    assert.deepEqual(security.tools.allow, ["read", "write", "web_search", "web_fetch"]);
-    assert.ok(security.tools.deny.includes("exec"));
-
-    const proposal = agent("presales-proposal");
-    assert.deepEqual(proposal.tools.allow, ["read", "write", "apply_patch"]);
-    assert.ok(proposal.tools.deny.includes("exec"));
+  it("keeps every concern agent able to return to router-agent without forming loops", () => {
+    for (const id of concernAgents) {
+      const current = agent(id);
+      assert.ok(current.tools.deny.includes("sessions_send"), `${id} must deny sessions_send`);
+      assert.deepEqual(
+        current.subagents.allowAgents,
+        ["router-agent"],
+        `${id} may only delegate back to router-agent`
+      );
+      assert.ok(
+        current.skills.includes("agent-scope-guard"),
+        `${id} must carry the scope guard skill`
+      );
+    }
   });
 
-  it("documents context carry-over and PR authorization in lane contracts", () => {
-    assert.match(routerContract, /For follow-up requests such as "PRして"/);
-    assert.match(routerContract, /prior user intent/);
-    assert.match(routerContract, /branch\s+creation,\s+commit,\s+push,\s+and\s+PR\s+creation\s+are\s+authorized/);
-    assert.match(routerContract, /route only to `telegram-fable`/);
-    assert.match(routerContract, /Do not co-spawn/);
-    assert.match(routerContract, /return the Local and Tailscale preview URLs/);
-    assert.match(routerContract, /do not paste the full artifact body/);
-    assert.match(routerContract, /correct route-only answer is `telegram-fable`/);
-    assert.match(routerSoul, /`telegram-fable`/);
-    assert.match(routerSoul, /must return `telegram-fable`/);
-    assert.match(routerSoul, /delegate only to `telegram-fable`/);
-    assert.match(infraContract, /PR workflow is pre-authorized/);
-    assert.match(infraContract, /task brief as the source of customer intent/);
-    assert.match(proposalContract, /approved copy and the constraints/);
-    assert.match(securityContract, /Do not use shell/);
+  it("gives azabu-corporate (★1) GitHub repo authority scoped to its own secret snapshot", () => {
+    const azabu = agent("azabu-corporate");
+    assert.ok(azabu.skills.includes("github"), "azabu-corporate must expose GitHub repo tools");
+    assert.match(azabu.description, /azabu\.io/);
+    assert.match(azabu.description, /Never touch foxcale/i);
+    assert.deepEqual(
+      azabu.sandbox.docker.binds,
+      ["/home/yasu/.openclaw/runtime-secrets/azabu-corporate:/run/openclaw-secrets:ro"],
+      "azabu-corporate must mount only its own secret snapshot"
+    );
+  });
+
+  it("gives foxcale-coding (★2) its own GitHub auth + secret snapshot, isolated from Azabu", () => {
+    const foxcale = agent("foxcale-coding");
+    assert.equal(
+      foxcale.sandbox.docker.setupCommand,
+      "if [ -f /workspace/.openclaw/bootstrap-runtime-secrets.sh ]; then sh /workspace/.openclaw/bootstrap-runtime-secrets.sh; fi\nsh /workspace/.openclaw/foxcale-github-auth.sh"
+    );
+    assert.deepEqual(
+      foxcale.sandbox.docker.binds,
+      ["/home/yasu/.openclaw/runtime-secrets/foxcale-coding:/run/openclaw-secrets:ro"],
+      "foxcale-coding must mount only its own secret snapshot"
+    );
+    assert.match(foxcale.description, /Never touch Azabu/i);
   });
 
   it("requires artifact skills to return Workspace Artifacts URLs", () => {
@@ -169,6 +179,31 @@ describe("OpenClaw concern-lane snapshot", () => {
     assert.match(skillDeploymentDoc, /\/workspace\/canvas\/<artifact-id>\//);
   });
 
+  it("documents concern isolation and PR authorization in the lane contracts", () => {
+    // Router taxonomy + the hard isolation rules.
+    assert.match(routerContract, /For follow-up requests such as "PRして"/);
+    assert.match(routerContract, /prior user intent/);
+    assert.match(routerContract, /Never route Azabu and foxcale[\s\S]*?repository work to the same subagent/);
+    assert.match(routerContract, /Cisco partner-SE work must carry no Azabu element/);
+    assert.match(routerContract, /route only to `telegram-fable`/);
+    assert.match(routerContract, /Do not co-spawn/);
+    assert.match(routerContract, /return the Local and Tailscale preview URLs/);
+    assert.match(routerContract, /do not paste the full artifact body/);
+    assert.match(routerSoul, /`telegram-fable`/);
+    assert.match(routerSoul, /never bring Azabu context into `work-cisco`/);
+    // Azabu (★1): owns azabu.io PR workflow, holds only the Azabu token.
+    assert.match(azabuContract, /PR workflow is pre-authorized/);
+    assert.match(azabuContract, /Azabu GitHub token only/);
+    assert.match(azabuContract, /Never touch a foxcale repository/);
+    // foxcale (★2): owns foxcale PR workflow, holds only the foxcale token.
+    assert.match(foxcaleCodingContract, /PR workflow is pre-authorized/);
+    assert.match(foxcaleCodingContract, /foxcale project GitHub token only/);
+    assert.match(foxcaleCodingContract, /Never touch[\s\S]*?an Azabu repository/);
+    assert.match(foxcaleCodingContract, /must never mix/);
+    // Cisco: no Azabu element.
+    assert.match(workCiscoContract, /no Azabu element/);
+  });
+
   it("runs the unattended heartbeat agent with a full sandbox exec policy so it never blocks on approval", () => {
     const heartbeat = agent("heartbeat");
     assert.deepEqual(heartbeat.tools.exec, { host: "sandbox", mode: "full" });
@@ -183,5 +218,7 @@ describe("OpenClaw concern-lane snapshot", () => {
       drop: "summarize"
     });
     assert.equal(config.plugins.entries.codex.config.appServer.experimental.sandboxExecServer, true);
+    assert.equal(config.plugins.entries["workspace-artifacts"].enabled, true);
+    assert.equal(config.plugins.entries["agent-command"].enabled, true);
   });
 });

@@ -5,9 +5,10 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const policyPath = path.resolve(__dirname, "../config/openclaw-agent-project/routing-policy.json");
+const laneDir = path.resolve(__dirname, "../config/openclaw-concern-lanes");
+const policyPath = path.join(laneDir, "routing-policy.json");
 const policy = JSON.parse(readFileSync(policyPath, "utf8"));
-const configPatchPath = path.resolve(__dirname, "../config/openclaw-agent-project/openclaw.patch.json");
+const configPatchPath = path.join(laneDir, "openclaw.patch.json");
 const configPatch = JSON.parse(readFileSync(configPatchPath, "utf8"));
 const channelRouterSkill = readFileSync(
   path.resolve(__dirname, "../skills/channel-router/SKILL.md"),
@@ -26,15 +27,16 @@ const auditSkill = readFileSync(
   "utf8"
 );
 
+// The operator's five concerns as concern agents (foxcale split into advisor + coding).
 const purposeAgentIds = [
   "work-cisco",
   "azabu-corporate",
-  "personal",
-  "coding",
   "foxcale-advisor",
   "foxcale-coding",
-  "learning-kb"
+  "learning-kb",
+  "personal"
 ];
+const routerAllowedAgents = [...purposeAgentIds, "telegram-fable"];
 
 function normalize(value) {
   return String(value ?? "").toLowerCase();
@@ -126,16 +128,18 @@ describe("OpenClaw broadcast orchestration policy", () => {
     assert.equal(routerAgent.model.primary, "openai/gpt-5.5");
     assert.deepEqual(routerAgent.model.fallbacks, ["openai/gpt-5.4-mini"]);
     assert.equal(routerAgent.thinkingDefault, "medium");
-    assert.deepEqual(routerAgent.subagents.allowAgents, purposeAgentIds);
+    assert.deepEqual(routerAgent.subagents.allowAgents, routerAllowedAgents);
     assert.equal(routerAgent.subagents.model, undefined);
+    // Production posture: explicit allow list (incl. exec/process so spawned coding
+    // children inherit shell tools), with sessions_send/browser denied.
     assert.deepEqual(
-      ["sessions_spawn", "sessions_yield", "subagents", "agents_list"].filter(
-        (tool) => !routerAgent.tools.alsoAllow.includes(tool)
+      ["sessions_spawn", "sessions_yield", "read", "write", "edit", "apply_patch", "exec", "process"].filter(
+        (tool) => !routerAgent.tools.allow.includes(tool)
       ),
       []
     );
-    assert.equal(routerAgent.tools.profile, undefined, "router-agent must not narrow inherited tools for delegated subagents");
-    assert.equal(routerAgent.tools.deny, undefined, "router-agent deny rules must not strip delegated subagent tools");
+    assert.ok(routerAgent.tools.deny.includes("sessions_send"));
+    assert.ok(routerAgent.tools.deny.includes("browser"));
   });
 
   it("raises subagent concurrency enough for full broadcast", () => {
@@ -220,11 +224,20 @@ describe("OpenClaw broadcast orchestration policy", () => {
     }
   });
 
+  it("enforces the ★1/★2 concern isolation in the routing policy", () => {
+    for (const [a, b] of policy.concern_isolation_policy.never_same_agent) {
+      assert.notEqual(a, b);
+    }
+    assert.ok(policy.concern_isolation_policy.work_cisco_excludes.includes("azabu-corporate"));
+    assert.ok(policy.concern_isolation_policy.work_cisco_excludes.includes("foxcale-coding"));
+    assert.ok(policy.concern_isolation_policy.work_cisco_excludes.includes("foxcale-advisor"));
+  });
+
   it("routes user comments before final synthesis to named subagents", () => {
-    const result = classifyUserCommentBeforeSynthesis("coding 側にこの条件も伝えて");
+    const result = classifyUserCommentBeforeSynthesis("foxcale-coding 側にこの条件も伝えて");
     assert.equal(result.attachToActiveOrchestration, true);
     assert.equal(result.treatAsNewRequest, false);
-    assert.deepEqual(result.targetAgents, ["coding"]);
+    assert.deepEqual(result.targetAgents, ["foxcale-coding"]);
     assert.equal(result.forwardNamed, true);
     assert.equal(result.reopenSynthesis, true);
   });
@@ -246,7 +259,7 @@ describe("OpenClaw broadcast orchestration policy", () => {
   });
 
   it("treats user comments after final synthesis as follow-ups", () => {
-    const result = classifyUserCommentBeforeSynthesis("coding 側にこれも伝えて", true);
+    const result = classifyUserCommentBeforeSynthesis("foxcale-coding 側にこれも伝えて", true);
     assert.equal(result.attachToActiveOrchestration, false);
     assert.equal(result.treatAsFollowUp, true);
     assert.deepEqual(result.targetAgents, []);
@@ -259,10 +272,10 @@ describe("OpenClaw broadcast orchestration policy", () => {
     assert.deepEqual(personalAgent.model.fallbacks, ["openai/gpt-5.4-mini"]);
   });
 
-  it("uses the foxcale project PAT for foxcale-coding sandbox GitHub auth", () => {
+  it("uses the foxcale project PAT for foxcale-coding sandbox GitHub auth (★2 token only)", () => {
     const foxcaleCodingAgent = configPatch.agents.list.find((agent) => agent.id === "foxcale-coding");
     const foxcalePolicy = policy.agents["foxcale-coding"];
-    const setupScriptPath = path.resolve(__dirname, "../config/openclaw-agent-project/foxcale-github-auth.sh");
+    const setupScriptPath = path.join(laneDir, "foxcale-github-auth.sh");
     const setupScript = readFileSync(setupScriptPath, "utf8");
     assert.ok(foxcaleCodingAgent, "foxcale-coding must be configured");
     assert.equal(
@@ -280,31 +293,34 @@ describe("OpenClaw broadcast orchestration policy", () => {
     ]);
   });
 
-  it("injects runtime secrets dynamically through sandbox BASH_ENV", () => {
+  it("injects runtime secrets dynamically through sandbox BASH_ENV and a per-agent materializer", () => {
     const dockerDefaults = configPatch.agents.defaults.sandbox.docker;
-    const bootstrapPath = path.resolve(__dirname, "../config/openclaw-agent-project/bootstrap-runtime-secrets.sh");
-    const setupScriptPath = path.resolve(__dirname, "../config/openclaw-agent-project/foxcale-github-auth.sh");
-    const writerPath = path.resolve(__dirname, "../config/openclaw-agent-project/write-runtime-local-json.js");
+    const bootstrapPath = path.join(laneDir, "bootstrap-runtime-secrets.sh");
+    const setupScriptPath = path.join(laneDir, "foxcale-github-auth.sh");
+    const materializerPath = path.join(laneDir, "materialize-runtime-secrets.js");
     const bootstrapScript = readFileSync(bootstrapPath, "utf8");
     const setupScript = readFileSync(setupScriptPath, "utf8");
-    const writerScript = readFileSync(writerPath, "utf8");
+    const materializerScript = readFileSync(materializerPath, "utf8");
 
     assert.equal(dockerDefaults.env.BASH_ENV, "/workspace/.openclaw/runtime-secret-env.sh");
     assert.equal(
       dockerDefaults.setupCommand,
       "if [ -f /workspace/.openclaw/bootstrap-runtime-secrets.sh ]; then sh /workspace/.openclaw/bootstrap-runtime-secrets.sh; fi"
     );
-    assert.ok(dockerDefaults.binds.includes("/home/yasu/.openclaw/runtime-secrets:/run/openclaw-secrets:ro"));
+    // Defaults now mount the empty per-agent _common snapshot, not the shared aggregate.
+    assert.ok(dockerDefaults.binds.includes("/home/yasu/.openclaw/runtime-secrets/_common:/run/openclaw-secrets:ro"));
     assert.match(bootstrapScript, /OPENCLAW_RUNTIME_SECRET_KEYS/);
     assert.match(bootstrapScript, /GH_TOKEN/);
     assert.match(bootstrapScript, /runtime-secret-overrides\.sh/);
     assert.match(bootstrapScript, /runtime-secret-env\.sh/);
     assert.match(setupScript, /runtime-secret-overrides\.sh/);
-    assert.match(writerScript, /runtime-secret-requests\.json/);
-    assert.match(writerScript, /vault .* is not allowed/);
+    // The materializer enforces the vault map at the host boundary (replaces the
+    // old aggregate write-runtime-local-json.js).
+    assert.match(materializerScript, /vault-access-map/);
+    assert.match(materializerScript, /never read an unauthorized vault/);
   });
 
-  it("keeps Azabu-owned repo work in azabu-corporate route hints", () => {
+  it("keeps Azabu-owned repo work in azabu-corporate route hints (★1)", () => {
     const azabuAgent = configPatch.agents.list.find((agent) => agent.id === "azabu-corporate");
     const azabuPolicy = policy.agents["azabu-corporate"];
     assert.ok(azabuAgent, "azabu-corporate must be configured");
@@ -339,19 +355,15 @@ describe("OpenClaw broadcast orchestration policy", () => {
     );
   });
 
-  it("keeps route hints for foxcale meeting notes", () => {
+  it("keeps route hints for foxcale meeting notes (★2 advisory)", () => {
     assert.equal(route("slack", "foxcale様の定例議事録を整理して").selected_agent, "foxcale-advisor");
   });
 
-  it("keeps route hints for foxcale coding work", () => {
+  it("keeps route hints for foxcale coding work (★2 repo)", () => {
     assert.equal(route("slack", "foxcaleのGitHub repoのバグ修正を進めて").selected_agent, "foxcale-coding");
   });
 
-  it("keeps route hints for generic coding work", () => {
-    assert.equal(route("slack", "このrepoのテストを修正して").selected_agent, "coding");
-  });
-
-  it("keeps route hints for CISSP review quizzes", () => {
+  it("keeps route hints for CISSP review quizzes (self-study)", () => {
     assert.equal(route("telegram", "CISSPの復習クイズを出して").selected_agent, "learning-kb");
   });
 
