@@ -15,15 +15,16 @@ For the agent orchestration/authorization detail see
 
 ## 1. Two planes: operate from the phone, maintain from the phone
 
-The operator never touches the host directly. There are two independent paths,
-both initiated from a phone:
+The operator never touches the host directly. There are two paths, both initiated
+from a phone:
 
 - **Operate plane** — day-to-day instructions over Telegram/Slack into the
   OpenClaw gateway.
 - **Maintain plane** — troubleshooting and feature work via **Codex remote** and
-  **Claude remote**, two CLI agents that live on the host. They are *redundant*:
-  either one can repair the host if it misbehaves. They edit this repo (source of
-  truth) and apply it to the live host.
+  **Claude remote**, two CLI agents that live on the host. They edit this repo
+  (source of truth) and apply it to the live host. They are **mutually redundant:
+  each can operate, repair, and restart the other**, so if one goes down the
+  other brings it back — and either one alone can still recover the host.
 
 ```mermaid
 flowchart TB
@@ -34,7 +35,7 @@ flowchart TB
         sl([Slack])
     end
 
-    subgraph maintain["Maintain plane — repair and improve (redundant)"]
+    subgraph maintain["Maintain plane — mutually redundant CLI agents"]
         cx["Codex remote<br/>(~/.codex)"]
         cl["Claude remote<br/>(~/.claude)"]
     end
@@ -43,6 +44,7 @@ flowchart TB
     phone -->|requests| sl
     phone -->|fix / improve| cx
     phone -->|fix / improve| cl
+    cx <-->|"operate / repair / restart each other"| cl
 
     subgraph host["OpenClaw gateway host"]
         gw["OpenClaw gateway<br/>(:18789)"]
@@ -58,10 +60,10 @@ flowchart TB
 
     cx -->|edit + git push| repo
     cl -->|edit + git push| repo
-    repo -->|"config patch --replace-path 'agents.list'<br/>gateway restart · sandbox recreate"| live
-    cx -. apply .-> live
-    cl -. apply .-> live
-    live -. drives .-> gw
+    repo -->|"config patch --replace-path agents.list; gateway restart; sandbox recreate"| live
+    cx -.->|apply| live
+    cl -.->|apply| live
+    live -.->|drives| gw
 
     classDef ph fill:#e8eaf6,stroke:#3f51b5;
     classDef m fill:#fff3cd,stroke:#b8860b;
@@ -70,8 +72,10 @@ flowchart TB
 ```
 
 Either maintenance agent can perform the full apply sequence
-(`config/openclaw-concern-lanes/README.md`), so a failure or unavailability of one
-does not block host recovery — that is the redundancy.
+(`config/openclaw-concern-lanes/README.md`). Because Codex remote and Claude
+remote can also operate and restart **each other**, a failure of one is recovered
+by the other — and the host stays maintainable from the phone in either case.
+That mutual loop is the redundancy.
 
 ## 2. Container image → instance → session
 
@@ -99,20 +103,24 @@ flowchart TB
         I3["openclaw-sbx-…(cisco)"]
     end
 
-    IMG -. "docker run<br/>(one per session)" .-> I0
-    IMG -. .-> I1
-    IMG -. .-> I2
-    IMG -. .-> I3
+    kA["secret snapshot:<br/>azabu (token A)"]
+    kB["secret snapshot:<br/>★2 (token B)"]
+    kC["_common (no secrets)"]
+
+    IMG -.->|"docker run (one per session)"| I0
+    IMG -.-> I1
+    IMG -.-> I2
+    IMG -.-> I3
 
     SU1 --> I0
     SC1 --> I1
     SC2 --> I2
     SC3 --> I3
 
-    I1 -. "ro mount" .-> kA["secret snapshot:<br/>azabu (token A)"]
-    I2 -. "ro mount" .-> kB["secret snapshot:<br/>★2 (token B)"]
-    I0 -. "ro mount" .-> kC["_common (no secrets)"]
-    I3 -. "ro mount" .-> kC
+    I1 -.->|ro mount| kA
+    I2 -.->|ro mount| kB
+    I0 -.->|ro mount| kC
+    I3 -.->|ro mount| kC
 
     classDef img fill:#e2f0d9,stroke:#27ae60;
     classDef priv fill:#fde2e2,stroke:#c0392b;
@@ -170,7 +178,7 @@ router, so no delegation loops form. The lanes are the operator's concerns.
 
 ```mermaid
 flowchart TD
-    gw([Telegram / Slack ingress]) --> R
+    gw(["Telegram / Slack ingress"]) --> R
 
     R["router-agent<br/>orchestrator · no domain credentials"]
 
@@ -191,9 +199,9 @@ flowchart TD
     R --> LK
     R --> PE
     R --> TF
-    AZ -. "return only to router" .-> R
-    C2 -. .-> R
-    WC -. .-> R
+    AZ -.->|return only to router| R
+    C2 -.-> R
+    WC -.-> R
 
     subgraph sysset["System agents (not user-routed)"]
         MN["main (on host)"]
@@ -214,7 +222,7 @@ flowchart TD
 
 | Layer | Unit | Isolation boundary |
 | --- | --- | --- |
-| Control | phone → Telegram/Slack (operate) · phone → Codex/Claude remote (maintain) | two independent planes; remote agents are redundant |
+| Control | phone → Telegram/Slack (operate) · phone → Codex/Claude remote (maintain) | two planes; the two remote agents operate/restart each other (mutually redundant) |
 | Authorization | 1Password vault → per-agent snapshot | one vault per concern; ★1/★2 disjoint |
 | Runtime | image → container instance → session | one immutable image; one container per session |
 | Logic | router-agent → concern lane | lanes return only to router; no loops |
