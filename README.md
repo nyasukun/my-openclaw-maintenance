@@ -73,6 +73,10 @@ Operational notes:
   concerns (`azabu-corporate` ★1, `foxcale-advisor`/`foxcale-coding` ★2,
   `work-cisco`, `learning-kb`, `personal`) plus the `telegram-fable` Artifact
   lane, with ★1/★2 GitHub-token isolation and the per-concern PR workflow.
+- [Host topology](docs/host-topology.md): whole-of-host mermaid diagrams — the
+  operate plane (phone → Telegram/Slack) and the redundant maintain plane (phone →
+  Codex remote / Claude remote), 1Password vault access granularity, and the
+  container image → instance → session relationship.
 - [Agent system overview](docs/agent-system-overview.md): whole-system mermaid
   diagrams of channel ingress, orchestration/routing, and the per-vault
   authorization boundary.

@@ -18,6 +18,7 @@ concerns ("関心事"):
 Plus the artifact lane `telegram-fable`, the orchestrator `router-agent`, and the
 system agents `main`/`hard`/`long`/`heartbeat`.
 
+- Whole-of-host view (operate/maintain planes, container lifecycle): [`host-topology.md`](host-topology.md)
 - Routing/contracts: [`config/openclaw-concern-lanes/README.md`](../config/openclaw-concern-lanes/README.md)
 - Routing policy (keywords, broadcast, slash commands): [`routing-policy.json`](../config/openclaw-concern-lanes/routing-policy.json)
 - Authorization model: [`agent-authz-vault-model.md`](agent-authz-vault-model.md)
