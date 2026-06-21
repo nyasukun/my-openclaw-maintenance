@@ -60,39 +60,52 @@ node scripts/sync-agent-workspace-boundaries.mjs
 
 ## Architecture
 
-### Two config rollouts coexist
+### One config design: concern lanes = the operator's five concerns
 
-`config/` contains **two distinct, parallel designs** for the same host. Know
-which one you are touching:
+`config/openclaw-concern-lanes/` is the **single** active design (a prior parallel
+`openclaw-agent-project/` draft was folded in and removed). `router-agent` fans
+Telegram/Slack ingress to exactly one *concern lane*, where the lanes are the
+operator's real concerns:
 
-- **`openclaw-concern-lanes/`** — the **currently deployed** snapshot. A
-  `router-agent` fans Telegram/Slack ingress to one of a few *concern lanes*
-  (`security-research`, `presales-proposal`, `infra-ops`, `telegram-fable`).
-  `openclaw.patch.json` here is generated *from* the live host.
-- **`openclaw-agent-project/`** — an earlier/alternate **purpose-separated**
-  design (8 domain agents: `work-cisco`, `azabu-corporate`, `personal`,
-  `coding`, `foxcale-advisor`, `foxcale-coding`, `learning-kb`, …). Documented in
-  `docs/agent-project-architecture.md`.
+- `azabu-corporate` — ★1 Azabu corporate ops + `azabu.io` site maintenance
+  (holds the Azabu GitHub token).
+- `foxcale-advisor` / `foxcale-coding` — ★2 foxcale advisory / repo work
+  (`foxcale-coding` holds the foxcale project token).
+- `work-cisco` — Cisco partner-SE (no Azabu element, no GitHub token).
+- `learning-kb` — self-study. `personal` — personal life admin.
 
-When in doubt, the concern-lanes snapshot reflects production.
+Plus `telegram-fable` (artifact lane), `router-agent` (orchestrator, no domain
+credentials), and the system agents `main`/`hard`/`long`/`heartbeat`.
+`openclaw.patch.json` is generated *from* the live host; the live host still
+carries four removed agents (`coding`, `security-research`, `presales-proposal`,
+`infra-ops`) until the next apply (see "Applying config" + ROLLBACK).
+
+**Hard constraints (enforced at the host boundary, see Secrets model):** ★1 and
+★2 use different GitHub tokens that must never mix; Cisco work carries no Azabu
+element. The whole-system view lives in `docs/agent-system-overview.md`.
 
 ### Config-as-data, validated against prose contracts
 
 The tests in `tests/*.test.mjs` are the spec. They read the JSON patch
-(`openclaw.patch.json`) **and** the markdown lane contracts
+(`openclaw.patch.json`), the routing policy (`routing-policy.json`), the vault map
+(`vault-access-map.json`), **and** the markdown lane contracts
 (`lane-contracts/*.AGENTS.md`, `*.SOUL.md`) and assert they agree — e.g. that
-`router-agent` denies `sessions_send`, that `infra-ops` has the sandbox authority
-its contract promises, and that specific guarantee sentences appear verbatim in
-the contracts (via `assert.match` on regexes). **Editing a contract or a tool
-allowlist almost always means updating the matching assertion**, and vice versa.
-The patch JSON and the contract markdown must be changed together.
+`router-agent` denies `sessions_send`, that the Azabu (★1) and foxcale (★2) GitHub
+tokens resolve from disjoint vaults and never reach the same agent, that
+`work-cisco` holds neither vault, and that specific guarantee sentences appear
+verbatim in the contracts (via `assert.match` on regexes). **Editing a contract,
+a tool allowlist, or a vault grant almost always means updating the matching
+assertion**, and vice versa. The patch JSON, vault map, and contract markdown must
+be changed together.
 
 ### Router orchestration model
 
 `router-agent` is the only user-facing agent. It broadcasts (or, in concern-lane
 mode, routes to exactly one lane) via `sessions_spawn`, streams partial results
-back, and synthesizes a final answer. Leaf agents **deny `sessions_send`/
-`sessions_spawn`** to prevent delegation loops. Agents self-select on broadcast
+back, and synthesizes a final answer. Concern lanes **deny `sessions_send`** and
+may only `sessions_spawn` back to `router-agent` (`subagents.allowAgents:
+["router-agent"]`), so they cannot form delegation loops (`telegram-fable` denies
+both). Agents self-select on broadcast
 with `CLAIM` / `CLAIM_PARTIAL` / `NO_CLAIM` and return
 `STREAM_UPDATE` / `FINAL_RESULT` / `BLOCKED`; out-of-scope direct handoffs return
 a compact `MISROUTE` block. `scripts/sync-agent-workspace-boundaries.mjs`
@@ -109,10 +122,14 @@ is the source of truth, and `materialize-runtime-secrets.js` writes a **per-agen
 snapshot (`runtime-secrets/<agent>/local.json`) containing only that agent's
 authorized vaults. Each sandbox bind-mounts only its own snapshot read-only at
 `/run/openclaw-secrets/local.json`; a `bootstrap-runtime-secrets.sh` setup command
-exposes it via `BASH_ENV`. The repo only ever stores **source metadata**
-(vault/item/field names), never secret values. Rationale + sources:
-`docs/agent-authz-vault-model.md`. Do not reintroduce a single shared snapshot
-mounted into all sandboxes (`tests/vault-access-map.test.mjs` guards this). Shell snippets must do
+exposes it via `BASH_ENV`. **The ★1 Azabu token (`GITHUB_TOKEN`) and the ★2
+foxcale token (`GITHUB_PAT_F_PROJECT`) resolve from disjoint vaults into separate
+per-agent snapshots — never grant both to one agent, never add a cross-concern
+`vault_fallbacks`, and keep `work-cisco` free of either vault.** The repo only
+ever stores **source metadata** (vault/item/field names), never secret values.
+Rationale + sources: `docs/agent-authz-vault-model.md`. Do not reintroduce a
+single shared snapshot mounted into all sandboxes (`tests/vault-access-map.test.mjs`
+guards this, along with the ★1/★2 isolation). Shell snippets must do
 redacted checks (`TOKEN=present`, not the value). `.gitignore` excludes
 `.openclaw/`, `.env*`, and logs — keep it that way.
 

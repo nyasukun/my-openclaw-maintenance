@@ -97,7 +97,7 @@ is:
 sh /workspace/.openclaw/foxcale-github-auth.sh
 ```
 
-Deploy `config/openclaw-agent-project/foxcale-github-auth.sh` to:
+Deploy `config/openclaw-concern-lanes/foxcale-github-auth.sh` to:
 
 ```text
 ~/.openclaw/workspaces/foxcale-coding/.openclaw/foxcale-github-auth.sh

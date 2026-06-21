@@ -1,5 +1,6 @@
 {
-  "version": 1,
+  "version": 2,
+  "model": "concern-lanes",
   "default_entry_agent": "router-agent",
   "handoff_payload_version": 1,
   "orchestration_mode": "broadcast_self_select_streaming",
@@ -33,11 +34,10 @@
     "broadcast_agents": [
       "work-cisco",
       "azabu-corporate",
-      "personal",
-      "coding",
       "foxcale-advisor",
       "foxcale-coding",
-      "learning-kb"
+      "learning-kb",
+      "personal"
     ],
     "selected_agents": [],
     "routing_reason": "string",
@@ -53,11 +53,10 @@
     "target_agents": [
       "work-cisco",
       "azabu-corporate",
-      "personal",
-      "coding",
       "foxcale-advisor",
       "foxcale-coding",
-      "learning-kb"
+      "learning-kb",
+      "personal"
     ],
     "do_not_wait_for_all": true,
     "claim_window_ms": 15000,
@@ -142,7 +141,6 @@
         "<agent-id> 側",
         "<agent-id> の案",
         "personal",
-        "coding",
         "work-cisco",
         "azabu-corporate",
         "foxcale-advisor",
@@ -163,7 +161,7 @@
   "ambiguous": {
     "selected_agent": "router-agent",
     "ask_clarification": true,
-    "question": "どの用途の agent に渡すべきか判断できません。Cisco 業務、法人運営、個人、coding、foxcale、学習のどれに近い依頼ですか？"
+    "question": "どの関心事の agent に渡すべきか判断できません。Cisco 業務、Azabu法人運営/azabu.io、foxcale案件、自己研鑽、個人のどれに近い依頼ですか？"
   },
   "slash_commands": {
     "agent_list_commands": [
@@ -181,11 +179,10 @@
     "purpose_agent_ids": [
       "work-cisco",
       "azabu-corporate",
-      "personal",
-      "coding",
       "foxcale-advisor",
       "foxcale-coding",
-      "learning-kb"
+      "learning-kb",
+      "personal"
     ],
     "plugin": "agent-command",
     "list_behavior": "Return configured purpose agents without invoking an LLM.",
@@ -223,9 +220,17 @@
       "token"
     ]
   },
+  "concern_isolation_policy": {
+    "comment": "★1 (Azabu/azabu.io) and ★2 (foxcale) use distinct GitHub tokens in distinct vaults and must never mix; Cisco work must carry no Azabu element. Enforced at the host boundary by per-agent runtime-secret snapshots (see vault-access-map.json).",
+    "never_same_agent": [
+      ["azabu-corporate", "foxcale-coding"],
+      ["azabu-corporate", "foxcale-advisor"]
+    ],
+    "work_cisco_excludes": ["azabu-corporate", "foxcale-advisor", "foxcale-coding"]
+  },
   "agents": {
     "work-cisco": {
-      "summary": "Cisco business, partner support, Disti, security proposals, technical reviews",
+      "summary": "Cisco partner-SE, partner support, Disti, security proposals, technical reviews",
       "workspace": "workspaces/work-cisco",
       "vaults": [
         "openclaw-work-cisco",
@@ -233,7 +238,7 @@
       ]
     },
     "azabu-corporate": {
-      "summary": "Azabu Tech, Atlantis Circle, corporate operations, contracts, invoices, strategy, and Azabu-owned repository work for azabu.io",
+      "summary": "Azabu Tech, Atlantis Circle, corporate operations, contracts, invoices, strategy, and Azabu-owned repository work for azabu.io (★1)",
       "workspace": "workspaces/azabu-corporate",
       "active_repos": [
         {
@@ -247,28 +252,8 @@
         "openclaw-pod"
       ]
     },
-    "personal": {
-      "summary": "Personal schedule, life admin, shopping, travel, family, personal notes",
-      "workspace": "workspaces/personal",
-      "vaults": [
-        "openclaw-personal",
-        "openclaw-pod"
-      ]
-    },
-    "coding": {
-      "summary": "Generic coding, implementation, debugging, tests, CI, PRs, and requirements definition",
-      "workspace": "workspaces/coding",
-      "vaults": [
-        "openclaw-coding",
-        "openclaw-pod"
-      ],
-      "model_policy": {
-        "coding": "claude-cli/claude-opus-4-8",
-        "requirements": "openai/gpt-5.5"
-      }
-    },
     "foxcale-advisor": {
-      "summary": "foxcale technical advisory, requirements, architecture, meeting notes, proposals, and risk/decision logs",
+      "summary": "foxcale technical advisory, requirements, architecture, meeting notes, proposals, and risk/decision logs (★2)",
       "workspace": "workspaces/foxcale-advisor",
       "vaults": [
         "openclaw-foxcale-advisor",
@@ -280,7 +265,7 @@
       }
     },
     "foxcale-coding": {
-      "summary": "foxcale customer coding, implementation, debugging, tests, CI, PRs, and repository work",
+      "summary": "foxcale customer coding, implementation, debugging, tests, CI, PRs, and repository work (★2)",
       "workspace": "workspaces/foxcale-coding",
       "active_repos": [
         {
@@ -299,10 +284,18 @@
       }
     },
     "learning-kb": {
-      "summary": "Learning knowledge base, reading, certifications, study notes",
+      "summary": "Learning knowledge base, reading, certifications, study notes (self-study)",
       "workspace": "workspaces/learning-kb",
       "vaults": [
         "openclaw-learning-kb",
+        "openclaw-pod"
+      ]
+    },
+    "personal": {
+      "summary": "Personal schedule, life admin, shopping, travel, family, personal notes",
+      "workspace": "workspaces/personal",
+      "vaults": [
+        "openclaw-personal",
         "openclaw-pod"
       ]
     }
@@ -339,12 +332,59 @@
       }
     },
     {
+      "id": "foxcale-coding",
+      "priority": 4,
+      "selected_agent": "foxcale-coding",
+      "requested_action_default": "draft",
+      "sensitivity_default": "high",
+      "routing_reason": "foxcale customer coding or repository context (★2)",
+      "match": {
+        "all_keywords": [
+          "foxcale"
+        ],
+        "any_keywords": [
+          "coding",
+          "コード",
+          "実装",
+          "バグ",
+          "修正",
+          "リファクタ",
+          "テスト",
+          "CI",
+          "PR",
+          "pull request",
+          "GitHub",
+          "repo",
+          "repository"
+        ]
+      }
+    },
+    {
+      "id": "foxcale-advisor",
+      "priority": 5,
+      "selected_agent": "foxcale-advisor",
+      "requested_action_default": "draft",
+      "sensitivity_default": "high",
+      "routing_reason": "foxcale customer advisory or project context (★2)",
+      "match": {
+        "any_keywords": [
+          "foxcale",
+          "foxcale様",
+          "foxcale 顧客",
+          "foxcale案件",
+          "foxcaleプロジェクト",
+          "定例議事録",
+          "技術顧問"
+        ]
+      }
+    },
+    {
       "id": "azabu-corporate",
       "priority": 20,
       "selected_agent": "azabu-corporate",
       "requested_action_default": "draft",
       "sensitivity_default": "high",
-      "routing_reason": "Azabu Tech, Atlantis Circle, corporate, contract, invoice, or management context",
+      "routing_reason": "Azabu Tech, Atlantis Circle, corporate, contract, invoice, management, or azabu.io repository context (★1)",
       "match": {
         "any_keywords": [
           "azabu",
@@ -394,59 +434,12 @@
       }
     },
     {
-      "id": "foxcale-coding",
-      "priority": 4,
-      "selected_agent": "foxcale-coding",
-      "requested_action_default": "draft",
-      "sensitivity_default": "high",
-      "routing_reason": "foxcale customer coding or repository context",
-      "match": {
-        "all_keywords": [
-          "foxcale"
-        ],
-        "any_keywords": [
-          "coding",
-          "コード",
-          "実装",
-          "バグ",
-          "修正",
-          "リファクタ",
-          "テスト",
-          "CI",
-          "PR",
-          "pull request",
-          "GitHub",
-          "repo",
-          "repository"
-        ]
-      }
-    },
-    {
-      "id": "foxcale-advisor",
-      "priority": 5,
-      "selected_agent": "foxcale-advisor",
-      "requested_action_default": "draft",
-      "sensitivity_default": "high",
-      "routing_reason": "foxcale customer advisory or project context",
-      "match": {
-        "any_keywords": [
-          "foxcale",
-          "foxcale様",
-          "foxcale 顧客",
-          "foxcale案件",
-          "foxcaleプロジェクト",
-          "定例議事録",
-          "技術顧問"
-        ]
-      }
-    },
-    {
       "id": "learning-kb",
       "priority": 40,
       "selected_agent": "learning-kb",
       "requested_action_default": "answer",
       "sensitivity_default": "low",
-      "routing_reason": "Learning, reading, certification, or knowledge-base context",
+      "routing_reason": "Learning, reading, certification, or knowledge-base context (self-study)",
       "match": {
         "any_keywords": [
           "学習",
@@ -460,37 +453,6 @@
           "読書メモ",
           "概念整理"
         ]
-      }
-    },
-    {
-      "id": "generic-coding",
-      "priority": 50,
-      "selected_agent": "coding",
-      "requested_action_default": "execute",
-      "sensitivity_default": "medium",
-      "routing_reason": "Generic coding, repository, implementation, debugging, tests, or requirements context",
-      "match": {
-        "any_keywords": [
-          "coding",
-          "コード",
-          "実装",
-          "バグ",
-          "修正",
-          "リファクタ",
-          "テスト",
-          "CI",
-          "PR",
-          "pull request",
-          "GitHub",
-          "repo",
-          "repository",
-          "要件定義",
-          "acceptance criteria"
-        ]
-      },
-      "model_policy": {
-        "coding": "claude-cli/claude-opus-4-8",
-        "requirements": "openai/gpt-5.5"
       }
     }
   ]

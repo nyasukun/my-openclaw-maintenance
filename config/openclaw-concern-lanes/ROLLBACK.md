@@ -84,6 +84,37 @@ After restoring the config, these directories can be archived or removed if they
 are no longer needed. Do not delete them before checking for any work products
 or auth/session state you want to preserve.
 
+## 2026-06-21 concern realignment (this change)
+
+The active lanes were realigned from the abstract set
+(`security-research`, `presales-proposal`, `infra-ops`) to the operator's five
+concerns. Net agent changes on apply:
+
+- **Removed:** `coding` (generic), `security-research`, `presales-proposal`,
+  `infra-ops`. Their capabilities are absorbed by the concern agents
+  (threat-analysis/proposal → `work-cisco`; PR workflow → the owning concern,
+  `azabu-corporate` for `azabu.io` / `foxcale-coding` for foxcale).
+- **Active concern lanes:** `azabu-corporate` (★1, Azabu `GITHUB_TOKEN`),
+  `foxcale-advisor` + `foxcale-coding` (★2, `GITHUB_PAT_F_PROJECT`),
+  `work-cisco`, `learning-kb`, `personal` — plus `telegram-fable`, `router-agent`,
+  and the system agents. 12 agents total.
+- The single shared `infra-ops` PR lane (whose token grant fell back to the Azabu
+  vault) is gone; ★1 and ★2 GitHub tokens are now isolated per agent.
+
+Removed agents' workspaces / state directories to archive only after checking for
+work products:
+
+```bash
+/home/yasu/.openclaw/workspaces/coding
+/home/yasu/.openclaw/workspace-security-research   /home/yasu/.openclaw/agents/security-research
+/home/yasu/.openclaw/workspace-presales-proposal   /home/yasu/.openclaw/agents/presales-proposal
+/home/yasu/.openclaw/workspace-infra-ops           /home/yasu/.openclaw/agents/infra-ops
+```
+
+To roll back this change: restore the `openclaw.json.bak.*` taken in the Apply
+step (`config/openclaw-concern-lanes/README.md`), `openclaw config validate`,
+`openclaw gateway restart`, `openclaw sandbox recreate --all --force`.
+
 ## Notes
 
 - Gateway restart was run after Phase 1 and Phase 2 config changes.
