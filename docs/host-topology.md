@@ -218,6 +218,51 @@ flowchart TD
     class MN,HB,HD,LG dim;
 ```
 
+## 5. Artifacts runtime container (dynamic artifacts)
+
+Separate from the OpenClaw per-session sandboxes above, the `workspace-artifacts`
+gateway plugin manages **one** long-lived container, `openclaw-artifacts-runtime`,
+for *dynamic* (Node-server) artifacts. A request to
+`/plugins/workspace-artifacts/run/<id>/` is reverse-proxied (HTTP + WebSocket) by
+the plugin to this container, where a small supervisor lazily starts the artifact
+(`npm start` or `node server.js`) and proxies to it.
+
+```mermaid
+flowchart LR
+    phone(["📱 / browser"]) -->|"auth: plugin"| GW["OpenClaw gateway (:18789)<br/>workspace-artifacts plugin"]
+    GW -->|"proxy HTTP+WS<br/>127.0.0.1:7080"| SUP["supervisor (:7000)<br/>in openclaw-artifacts-runtime"]
+    SUP -->|"PORT/BASE_PATH<br/>lazy start"| A1["artifact A<br/>npm start"]
+    SUP --> A2["artifact B<br/>node server.js"]
+    ART[("workspace/artifacts/<id>")] -.->|rw bind| SUP
+
+    classDef safe fill:#e2f0d9,stroke:#27ae60;
+    class SUP,A1,A2 safe;
+```
+
+How it differs from the per-session sandboxes (§2):
+
+| | OpenClaw sandboxes | artifacts runtime |
+| --- | --- | --- |
+| Managed by | OpenClaw core | the plugin (direct `docker`) |
+| Lifetime / count | one per session | one shared, long-lived |
+| Secrets | per-agent snapshot mounted | **none — never** |
+| Exposure | internal | supervisor published to **127.0.0.1 only**; gateway `auth: plugin` is the gate |
+| Outbound | per image policy | egress allowed for `npm ci` (toggle `runtime.egress: false` for offline) |
+
+It runs untrusted generated code, so it deliberately gets **no 1Password / vault
+snapshot** (it is irrelevant to the ★1/★2 isolation), runs non-root with
+`--cap-drop ALL` and resource limits, and is only reachable through the
+authenticated gateway. See `plugins/workspace-artifacts/README.md` for config.
+
+**Verification engine.** The same container also bundles headless Chromium
+(Playwright base image) and is the *only* place artifacts can be rendered: the
+agent sandboxes have no browser and cannot reach the gateway, so they request a
+render by dropping `artifacts/<id>/.verify/request.json` and read back
+`screenshot.png` + `result.json` (console/JS/network errors) — all over the
+shared `workspace/{artifacts,canvas}` bind mount, the only reliable
+sandbox↔host channel. This is why the container is **eagerly started** and why it
+mounts `canvas/` as well as `artifacts/`.
+
 ## How the pieces line up
 
 | Layer | Unit | Isolation boundary |

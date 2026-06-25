@@ -10,6 +10,33 @@
       "rootPath": {
         "type": "string",
         "description": "Optional workspace root override. Defaults to the configured OpenClaw workspace."
+      },
+      "runtime": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Dynamic (Node server) artifact runtime. The plugin proxies /plugins/workspace-artifacts/run/<id>/ to a single managed container.",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Enable the dynamic-artifact runtime container. Defaults to true."
+          },
+          "dockerBin": {
+            "type": "string",
+            "description": "Docker (or compatible) CLI binary. Defaults to 'docker'."
+          },
+          "image": {
+            "type": "string",
+            "description": "Runtime image tag. Built from plugins/workspace-artifacts/runtime if absent. Defaults to 'openclaw-artifacts-runtime:0.1.0'."
+          },
+          "hostPort": {
+            "type": "number",
+            "description": "Loopback host port the supervisor (container :7000) is published to. Defaults to 7080."
+          },
+          "egress": {
+            "type": "boolean",
+            "description": "Allow outbound network so 'npm ci' can fetch deps. Set false for an offline (server.js-only) posture. Defaults to true."
+          }
+        }
       }
     }
   },

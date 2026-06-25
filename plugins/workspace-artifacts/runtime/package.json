@@ -1,0 +1,16 @@
+{
+  "name": "openclaw-artifacts-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "In-container supervisor + headless verify engine for Workspace Artifacts.",
+  "bin": {
+    "artifacts-supervisor": "supervisor.mjs"
+  },
+  "scripts": {
+    "start": "node supervisor.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.61.0"
+  }
+}

@@ -9,6 +9,7 @@
   },
   "files": [
     "dist",
+    "runtime",
     "openclaw.plugin.json",
     "README.md"
   ],

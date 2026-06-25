@@ -3,6 +3,16 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { Duplex } from "node:stream";
+import {
+  ensureRuntimeContainer,
+  parseRunId,
+  proxyHttp,
+  proxyUpgrade,
+  resolveRuntimeConfig,
+  RUN_SEGMENT,
+  type RuntimeConfig,
+} from "./runtime.js";
 
 const PLUGIN_ID = "workspace-artifacts";
 const ROUTE_PREFIX = "/plugins/workspace-artifacts";
@@ -254,10 +264,33 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   }
 }
 
-async function handleRoute(root: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
+type RuntimeContext = {
+  cfg: RuntimeConfig;
+  mounts: { artifactsDir: string; canvasDir: string };
+  logger: { info: (m: string) => void; warn: (m: string) => void };
+};
+
+async function handleRoute(
+  root: string,
+  rt: RuntimeContext,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
   const requestUrl = new URL(req.url ?? "/", "http://openclaw.local");
   const pathname = requestUrl.pathname;
   const suffix = pathname.slice(ROUTE_PREFIX.length) || "/";
+
+  // Dynamic artifacts: proxy `/run/<id>/…` to the runtime container.
+  if (suffix.split("/").filter(Boolean)[0] === RUN_SEGMENT) {
+    const id = parseRunId(suffix);
+    if (!id) {
+      sendJson(res, 404, { ok: false, error: "Invalid artifact id.", code: "invalid_run_id" });
+      return;
+    }
+    await ensureRuntimeContainer(rt.cfg, rt.mounts, rt.logger);
+    proxyHttp(req, res, rt.cfg.hostPort);
+    return;
+  }
 
   if (req.method === "GET" && (suffix === "/" || suffix === "/index.html")) {
     sendHtml(res, renderAppHtml(root));
@@ -308,7 +341,7 @@ function handleError(res: ServerResponse, error: unknown): void {
   sendJson(res, status, { ok: false, error: message, code });
 }
 
-function renderAppHtml(root: string): string {
+export function renderAppHtml(root: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -452,6 +485,7 @@ function renderAppHtml(root: string): string {
     const api = ${JSON.stringify(ROUTE_PREFIX)};
     const state = { dir: "", file: "", fileType: "text", dirty: false, mobileView: "files" };
     const initialFile = new URLSearchParams(window.location.search).get("file") || "";
+    const initialRun = new URLSearchParams(window.location.search).get("run") || "";
     const qs = (id) => document.getElementById(id);
     const status = (text, error = false) => { const el = qs("status"); el.textContent = text; el.className = error ? "status error" : "status"; };
 
@@ -537,9 +571,42 @@ function renderAppHtml(root: string): string {
       qs("editor").readOnly = data.type !== "text";
       qs("editor").value = data.type === "text" ? data.content : "";
       renderPreview(data);
+      maybeOfferRun(data);
       status(data.type === "text" ? "Opened " + data.path : "Preview only: " + data.path);
       await loadTree(parentDir(data.path));
       setMobileView(data.type !== "text" || data.path.endsWith(".html") || data.path.endsWith(".htm") ? "preview" : "edit");
+    }
+
+    function openRun(id) {
+      const preview = qs("preview");
+      preview.innerHTML = "";
+      const frame = document.createElement("iframe");
+      frame.src = api + "/run/" + encodeURIComponent(id) + "/";
+      preview.appendChild(frame);
+      status("Running app: " + id);
+      setMobileView("preview");
+    }
+
+    function maybeOfferRun(data) {
+      if (data.type !== "text") return;
+      // Match artifacts/<id>/artifact.json with plain string ops. A slash- or
+      // dot-escaped regex literal here would be mangled by this enclosing
+      // template literal (\/ -> /, \. -> .), breaking the whole inline script.
+      const parts = (data.path || "").split("/");
+      if (parts.length !== 3 || parts[0] !== "artifacts" || parts[2] !== "artifact.json") return;
+      const id = parts[1];
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(id)) return;
+      let meta;
+      try { meta = JSON.parse(data.content); } catch (err) { return; }
+      if (!meta || meta.type !== "server") return;
+      const bar = document.createElement("div");
+      bar.style.padding = "10px 16px";
+      const btn = document.createElement("button");
+      btn.className = "primary";
+      btn.textContent = "Open running app";
+      btn.onclick = () => openRun(id);
+      bar.appendChild(btn);
+      qs("preview").prepend(bar);
     }
 
     function renderPreview(data) {
@@ -631,8 +698,10 @@ function renderAppHtml(root: string): string {
       event.preventDefault();
       event.returnValue = "";
     });
-    setMobileView(initialFile ? "preview" : "files");
-    (initialFile ? openFile(initialFile) : loadTree("")).catch((err) => status(err.message, true));
+    setMobileView(initialRun || initialFile ? "preview" : "files");
+    Promise.resolve(
+      initialRun ? openRun(initialRun) : initialFile ? openFile(initialFile) : loadTree(""),
+    ).catch((err) => status(err.message, true));
   </script>
 </body>
 </html>`;
@@ -648,16 +717,44 @@ const entry: OpenClawPluginDefinition = definePluginEntry({
   description: "Browse, preview, and edit OpenClaw workspace files from the authenticated Gateway.",
   register(api) {
     const root = resolveWorkspaceRoot(api);
+    const rt: RuntimeContext = {
+      cfg: resolveRuntimeConfig(api.pluginConfig),
+      mounts: { artifactsDir: path.join(root, "artifacts"), canvasDir: path.join(root, "canvas") },
+      logger: { info: (m) => api.logger.info(m), warn: (m) => api.logger.warn(m) },
+    };
+    // Eager start so the verify watcher is running for static artifacts too
+    // (those never hit /run). Fire-and-forget; lazy ensure still covers retries.
+    if (rt.cfg.enabled) {
+      ensureRuntimeContainer(rt.cfg, rt.mounts, rt.logger).catch((error) =>
+        api.logger.warn(`Workspace Artifacts runtime eager start failed: ${error instanceof Error ? error.message : String(error)}`),
+      );
+    }
     api.registerHttpRoute({
       path: ROUTE_PREFIX,
       match: "prefix",
       auth: "plugin",
       handler: async (req: IncomingMessage, res: ServerResponse) => {
         try {
-          await handleRoute(root, req, res);
+          await handleRoute(root, rt, req, res);
         } catch (error) {
           api.logger.warn(`Workspace Artifacts request failed: ${error instanceof Error ? error.message : String(error)}`);
           handleError(res, error);
+        }
+        return true;
+      },
+      handleUpgrade: async (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+        const suffix = new URL(req.url ?? "/", "http://openclaw.local").pathname.slice(ROUTE_PREFIX.length) || "/";
+        const id = suffix.split("/").filter(Boolean)[0] === RUN_SEGMENT ? parseRunId(suffix) : null;
+        if (!id) {
+          socket.destroy();
+          return true;
+        }
+        try {
+          await ensureRuntimeContainer(rt.cfg, rt.mounts, rt.logger);
+          proxyUpgrade(req, socket, head, rt.cfg.hostPort);
+        } catch (error) {
+          api.logger.warn(`Workspace Artifacts upgrade failed: ${error instanceof Error ? error.message : String(error)}`);
+          socket.destroy();
         }
         return true;
       },

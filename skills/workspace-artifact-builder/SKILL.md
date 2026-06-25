@@ -20,6 +20,28 @@ When the user asks to create, revise, preview, or continue an artifact:
   requested deliverable.
 - Never overwrite an existing artifact unless the user clearly asks for a revision.
 
+## Static vs Dynamic: pick the kind first
+
+Before writing anything, decide which kind of web artifact this is. Both are
+first-class — do **not** default to static out of habit.
+
+- **Static** (`type: "web"`, the common case): a self-contained HTML/CSS/JS page
+  with no server logic. Served by the plugin's file preview
+  (`canvas/<id>/` + `?file=`). Choose this for landing pages, dashboards driven by
+  inline data, animations, mockups, single-screen mini-apps.
+- **Dynamic** (`type: "server"`): a real Node server is required. Choose this when
+  the result needs **any** of: a backend/API, server-side rendering, a framework
+  dev server (Next.js/Vite/etc.), live/streaming/websocket data, reading
+  request-time input, multiple server routes, or anything a single static file
+  cannot do. Served through the runtime container at `/run/<id>/` (see
+  "Dynamic / Server Artifacts"). WebSockets/HMR work.
+
+If the user asks for something interactive that clearly needs a server (e.g. "an
+app that saves entries", "a live API", "a Next.js site"), build a **dynamic**
+artifact — do not approximate it with a static page. When in doubt and the page
+is self-contained, prefer static; when it genuinely needs server behaviour,
+prefer dynamic.
+
 ## Fast Path for New Web Artifacts
 
 When the user asks for a new small web/HTML Artifact and gives an explicit
@@ -78,6 +100,7 @@ Preserve `createdAt` when revising. Update `updatedAt` on every change. Use ISO 
 Set `type` to:
 
 - `web` for previewable HTML/CSS/JS artifacts.
+- `server` for artifacts that run a Node server (see "Dynamic / Server Artifacts").
 - `document` for markdown, text, or structured documents.
 - `data` for JSON/CSV or dataset artifacts.
 - `mixed` when the artifact includes several kinds.
@@ -121,8 +144,49 @@ For web artifacts:
 - For animation artifacts, verify the animation has a clear beginning, middle, and end; avoid a single static scene with superficial motion.
 - Include reduced-motion handling or a non-animated fallback when practical.
 - Prefer real provided assets for brand/product/logo work. Do not approximate a provided logo with generic shapes when the asset is available.
-- If browser, screenshot, or DOM tooling is available, preview the entry file before responding and fix visible issues. If visual preview is not available, inspect the HTML/CSS/JS manually and avoid claiming visual verification.
+- **Render and verify in a real browser via the workspace verify service** (see
+  "Visual Verification" below) before responding. The sandbox has no browser, but
+  the runtime container does — request a render through the workspace filesystem
+  and act on the result. Do not claim visual verification without it.
 - Before final response, ensure the canvas mirror contains every runtime file referenced by the entry file.
+
+## Visual Verification
+
+The agent sandbox has **no Chromium/Node** and cannot reach the gateway. A
+headless Chromium runs in the artifacts runtime container instead, and you drive
+it over the shared workspace filesystem. Use it for **both** static and dynamic
+artifacts.
+
+1. Write a request at `artifacts/<artifact-id>/.verify/request.json`:
+   - Static artifact: `{ "target": "static", "entry": "canvas/<artifact-id>/index.html" }`
+   - Dynamic artifact: `{ "target": "run", "path": "/" }`
+   - Optional: `"viewport": {"width":1280,"height":800}`, `"fullPage": true`,
+     `"waitUntil": "networkidle"`.
+2. Poll for `artifacts/<artifact-id>/.verify/result.json` to appear/update (the
+   service renames your request to `request.handled.json` when done). A dynamic
+   artifact's first render also starts its server, so allow extra time.
+3. Read `result.json`:
+   - `consoleErrors`, `pageErrors`, `failedRequests` must be empty for a clean
+     pass; `status` should be `< 400`. Fix any issue and re-request.
+   - `screenshot.png` is written alongside — inspect it if you can read images.
+
+Sandbox snippet (only `sh`/`python3` needed):
+
+```sh
+ID=<artifact-id>
+mkdir -p "/workspace/artifacts/$ID/.verify"
+# static example; for dynamic use: {"target":"run","path":"/"}
+printf '{"target":"static","entry":"canvas/%s/index.html"}' "$ID" \
+  > "/workspace/artifacts/$ID/.verify/request.json"
+for i in $(seq 1 60); do
+  [ -f "/workspace/artifacts/$ID/.verify/result.json" ] && break; sleep 1
+done
+cat "/workspace/artifacts/$ID/.verify/result.json"
+```
+
+If `result.json` never appears, the runtime container may be disabled
+(`runtime.enabled:false`) or still starting — fall back to a careful manual
+HTML/CSS/JS review and say visual verification was unavailable.
 
 ## Web Artifacts
 
@@ -146,6 +210,71 @@ Tailscale: [Open from phone](<tailscale-serve-origin>/plugins/workspace-artifact
 ```
 
 Resolve `<gateway-port>` from OpenClaw config or status; default to `18789` when not configured. Resolve `<tailscale-serve-origin>` from current OpenClaw status/config when Tailscale Serve is enabled. If no Tailscale Serve origin is configured, still provide the Local URL and state that the Tailscale URL is unavailable.
+
+## Dynamic / Server Artifacts
+
+Use a **server artifact** when the result needs a running Node process — an
+Express/Fastify app, a Next.js/Vite dev server, or anything with a backend or
+server-side rendering that a static `index.html` preview cannot deliver. Prefer a
+plain static web artifact whenever the result can be self-contained; reach for a
+server artifact only when real server behaviour is required.
+
+A server artifact is served through the runtime container, not the iframe
+preview. The previewable URL is:
+
+```text
+/plugins/workspace-artifacts/run/<artifact-id>/
+```
+
+### Contract
+
+1. Put the project in `artifacts/<artifact-id>/` (this is the runtime root — do
+   **not** rely on the `canvas/` mirror for server artifacts).
+2. Provide **one** of:
+   - a `package.json` whose `start` script launches the server, or
+   - a `server.js` entry (no dependencies, run directly with `node server.js`).
+3. The server **must** listen on `process.env.PORT` (and bind `0.0.0.0`).
+4. The full request path — including the proxy prefix — is forwarded unchanged,
+   so the app **must serve under `process.env.BASE_PATH`**
+   (= `/plugins/workspace-artifacts/run/<artifact-id>`). Concretely:
+   - Express: mount your routes under `process.env.BASE_PATH` (e.g.
+     `app.use(process.env.BASE_PATH || "/", router)`), or use relative asset
+     paths plus a `<base href="…">`.
+   - Next.js: set `basePath: process.env.BASE_PATH` in `next.config.js`.
+   - Vite: set `base: process.env.BASE_PATH + "/"`.
+   Ignoring `BASE_PATH` makes absolute asset URLs (`/style.css`) 404 under the
+   subpath proxy.
+5. Set `type: "server"` in `artifact.json` and add an `entry` pointing at the
+   start file (e.g. `server.js` or `package.json`). When the operator opens
+   `artifacts/<id>/artifact.json` in the Workspace UI, an **"Open running app"**
+   button appears.
+
+### Metadata example
+
+```json
+{
+  "id": "live-dashboard",
+  "title": "Live metrics dashboard",
+  "type": "server",
+  "entry": "server.js",
+  "createdAt": "2026-06-21T00:00:00.000Z",
+  "updatedAt": "2026-06-21T00:00:00.000Z",
+  "summary": "Express app streaming live metrics over WebSocket."
+}
+```
+
+### Response URLs
+
+```text
+Local: [Open running app](http://127.0.0.1:<gateway-port>/plugins/workspace-artifacts/run/<artifact-id>/) - http://127.0.0.1:<gateway-port>/plugins/workspace-artifacts/run/<artifact-id>/
+Tailscale: [Open from phone](<tailscale-serve-origin>/plugins/workspace-artifacts/run/<artifact-id>/) - <tailscale-serve-origin>/plugins/workspace-artifacts/run/<artifact-id>/
+```
+
+The first request starts the server (and runs `npm ci` if there is a
+`package.json`), so it can take longer; mention this to the operator. The runtime
+container has **no secrets** and runs untrusted code — never expect 1Password
+tokens, `.env` values, or credentials to be available inside a server artifact.
+WebSockets are proxied, so HMR and live updates work.
 
 ## Document and Data Artifacts
 
