@@ -30,6 +30,12 @@ services:
       HERMES_INFERENCE_MODEL: ${HERMES_INFERENCE_MODEL:-openrouter/owl-alpha}
       HERMES_MODEL: ${HERMES_MODEL:-openrouter/owl-alpha}
       HERMES_TUI_PROVIDER: ${HERMES_TUI_PROVIDER:-openrouter}
+      # Messaging gateway allowlists (non-secret user-id CSVs). The bot TOKENS go in
+      # hermes.env.tpl (1Password), NOT here. Without an allowlist all users are
+      # denied. See "Messaging gateway" in docs/hermes-agent.md.
+      # TELEGRAM_ALLOWED_USERS: "123456789"
+      # SLACK_ALLOWED_USERS: "U0123456789"
+      # DISCORD_ALLOWED_USERS: "123456789012345678"
 
     # No inbound ports — the gateway is outbound-polling.
 

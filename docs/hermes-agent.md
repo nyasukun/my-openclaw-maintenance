@@ -135,10 +135,61 @@ docker compose exec -T hermes hermes doctor       # config/connectivity check
 docker compose logs -f hermes                     # gateway logs
 ```
 
-The optional messaging gateway is the container's default command; it runs only
-with the **new, Hermes-only** bot tokens from `hermes.env.tpl`. Leave those
-commented out to run CLI-only and avoid any chance of double-receiving a platform
-OpenClaw already polls.
+The container's main process is the messaging gateway (`hermes gateway run`). With
+no bot tokens configured it idles safely (CLI-only). To connect Telegram/Slack/etc.,
+see **Messaging gateway** below.
+
+## Messaging gateway (optional)
+
+The gateway connects Hermes to chat platforms (Telegram, Slack, Discord, …). A
+platform is **enabled by the presence of its bot-token env var**; without a
+per-platform or global allowlist, every user is denied. Tokens are secrets (→
+1Password, via `hermes.env.tpl`); user-id allowlists are not (→ compose
+`environment:`).
+
+**Hard rule:** create a **new, Hermes-only bot** for each platform. Never reuse
+OpenClaw's `router-agent` bot token — a shared token makes both stacks poll the same
+bot and double-receive. A separate bot account is fine; it just must be its own.
+
+Env vars (token enables the platform; allowlist is a CSV of user ids):
+
+| Platform | Token env (→ 1Password) | Allowlist env (→ compose) |
+|---|---|---|
+| Telegram | `TELEGRAM_BOT_TOKEN` | `TELEGRAM_ALLOWED_USERS` |
+| Slack | `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN` | `SLACK_ALLOWED_USERS` |
+| Discord | `DISCORD_BOT_TOKEN` | `DISCORD_ALLOWED_USERS` |
+| any | — | `GATEWAY_ALLOWED_USERS` (all platforms) |
+
+Steps (Telegram example):
+
+1. Create a new bot via Telegram @BotFather → get its token; note your numeric user
+   id (e.g. from @userinfobot).
+2. Store the token in the Hermes-only vault, e.g. item `telegram-hermes`, field
+   `token`.
+3. Add an **active** reference line to `docker/hermes/hermes.env.tpl` (not a `#`
+   comment — `op inject` resolves commented references too and would fail):
+
+   ```
+   TELEGRAM_BOT_TOKEN=op://Hermes/telegram-hermes/token
+   ```
+4. Add the allowlist (non-secret) to `docker-compose.yml` under `environment:`:
+
+   ```yaml
+       TELEGRAM_ALLOWED_USERS: "123456789"
+   ```
+5. Apply — a systemd restart re-materializes secrets and recreates the container
+   (ExecStop `down` → ExecStartPre materialize → ExecStart `up`), so it picks up the
+   new token and allowlist:
+
+   ```bash
+   systemctl --user restart hermes.service
+   docker compose exec -T hermes hermes doctor   # platform now present, no allowlist warning
+   docker compose logs -f hermes                 # watch it connect
+   ```
+   (By hand instead: `./materialize-hermes-secrets.sh && docker compose up -d --force-recreate`.)
+
+Then message the bot. Slack/Discord follow the same pattern with their env vars
+above (Slack needs both `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN`).
 
 ## Maintain
 
