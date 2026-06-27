@@ -1,0 +1,27 @@
+# User systemd unit for the containerized Hermes (Option B), parallel to OpenClaw.
+# Install:
+#   cp docker/hermes/hermes.service ~/.config/systemd/user/hermes.service
+#   # edit %h paths below if this repo lives elsewhere
+#   systemctl --user daemon-reload && systemctl --user enable --now hermes.service
+#
+# ExecStartPre resolves secrets on the host into the per-user tmpfs runtime dir
+# (%t = /run/user/<uid>); the resolved file never persists and never enters the
+# image. `op` must be signed in for the user session.
+[Unit]
+Description=Hermes Agent (containerized, parallel to OpenClaw)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/work/my-openclaw-maintenance/docker/hermes
+Environment=HERMES_SECRETS_ENV=%t/hermes-secrets/hermes.env
+# Self-contained materialize — no removable default paths (cf. vault-map landmine).
+ExecStartPre=%h/work/my-openclaw-maintenance/docker/hermes/materialize-hermes-secrets.sh
+ExecStart=/usr/bin/docker compose up
+ExecStop=/usr/bin/docker compose down
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

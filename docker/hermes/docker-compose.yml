@@ -1,0 +1,44 @@
+# Containerized Hermes Agent, run in parallel with the OpenClaw gateway (Option B).
+# Bring up:  ./materialize-hermes-secrets.sh && docker compose up -d
+# CLI:       docker compose exec hermes hermes
+# Logs:      docker compose logs -f hermes
+services:
+  hermes:
+    build: .
+    image: hermes:local
+    container_name: hermes
+    restart: unless-stopped
+
+    # State only (sessions/skills/memory). Hermes is stateful — this volume is the
+    # point of the deployment. Secrets are NEVER written here.
+    volumes:
+      - hermes-data:/data
+
+    # Secrets reach Hermes ONLY as process env, from the host-resolved tmpfs file.
+    env_file:
+      - ${HERMES_SECRETS_ENV:-/run/user/1000/hermes-secrets/hermes.env}
+
+    environment:
+      HERMES_HOME: /data
+      HERMES_IGNORE_USER_CONFIG: "1"
+      # Non-secret behaviour setting (kept out of the secret env-file on purpose).
+      # Set to a real OpenRouter model id, e.g. "openrouter/<provider>/<model>".
+      HERMES_MODEL: ${HERMES_MODEL:-}
+
+    # No inbound ports — the gateway is outbound-polling.
+
+    # Fine-grained control of the self-improving agent:
+    read_only: true                 # immutable rootfs; only /data + tmpfs are writable
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    mem_limit: 4g
+    tmpfs:
+      - /tmp
+      - /home/hermes/.cache         # uv/python/playwright scratch under XDG_CACHE_HOME
+    # If a skill needs more writable paths, relax read_only or add a named tmpfs —
+    # do NOT mount host paths or the OpenClaw workspace in here.
+
+volumes:
+  hermes-data:

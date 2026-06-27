@@ -5,9 +5,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this repository is
 
 This is **not an application**. It is the version-controlled source of truth for
-maintaining one operator's OpenClaw deployment (a multi-agent gateway fronting
-Telegram/Slack). It holds three kinds of artifact, each deployed *out* to a live
-host rather than run from here:
+maintaining the operator's **two parallel agent stacks** on one host: **OpenClaw**
+(a multi-agent gateway fronting Telegram/Slack) and **Hermes Agent**
+([Nous Research Hermes](https://hermes-agent.org/), a self-hosted persistent agent
+installed under `~/.hermes`). The two share only the host and the single OpenRouter
+upstream; their control planes, tokens, and secret stores stay disjoint. Hermes is
+a standalone stack, **not** an OpenClaw plugin — its install + coexistence runbook
+is `docs/hermes-agent.md`, and the hard coexistence constraints (never run
+`hermes claw migrate` blindly, never reuse OpenClaw's bot tokens, give Hermes its
+own OpenRouter key) live there. Everything below concerns the OpenClaw stack unless
+stated otherwise.
+
+It holds three kinds of artifact, each deployed *out* to a live host rather than
+run from here:
 
 - **`config/`** — OpenClaw config patches (JSON) plus the AGENTS.md/SOUL.md lane
   contracts that go with them. These are applied to a live host with

@@ -1,9 +1,22 @@
-# My OpenClaw Maintenance
+# My OpenClaw + Hermes Maintenance
 
-Personal maintenance material for OpenClaw environments operated from local Codex.
+Personal maintenance material for the **two agent stacks** this operator runs in
+parallel on one host:
 
-This repository is the source of truth for local Codex maintenance skills. The
-installed Codex skill directory under `~/.codex/skills` is only a deployed copy.
+- **OpenClaw** — multi-agent gateway fronting Telegram/Slack (`router-agent` +
+  concern lanes). Config patches, lane contracts, skills, and plugins here are
+  deployed out to the live host.
+- **Hermes Agent** — [Nous Research Hermes](https://hermes-agent.org/), a
+  self-hosted persistent agent installed under `~/.hermes`, run alongside OpenClaw
+  and driven through the same single OpenRouter provider. See
+  [docs/hermes-agent.md](docs/hermes-agent.md) for install + coexistence rules.
+
+The two stacks share only the host and the OpenRouter upstream; their control
+planes, tokens, and secret stores stay disjoint.
+
+This repository is the source of truth for both. Deployed copies (Codex skill dir
+under `~/.codex/skills`, OpenClaw's managed skill/plugin dirs, `~/.hermes`) are only
+deployed copies.
 
 ## Skills
 
@@ -17,6 +30,27 @@ installed Codex skill directory under `~/.codex/skills` is only a deployed copy.
 
 - `plugins/workspace-artifacts`: authenticated OpenClaw Gateway UI for browsing,
   previewing, and editing workspace files.
+
+## Hermes Agent
+
+Hermes is a standalone stack (it is **not** an OpenClaw plugin) installed under
+`~/.hermes` and run in parallel with the OpenClaw gateway. Install and coexistence
+rules — including the hard constraints (never run `hermes claw migrate` blindly,
+never reuse OpenClaw's bot tokens, give Hermes its own OpenRouter key) — live in
+[docs/hermes-agent.md](docs/hermes-agent.md). Quick start:
+
+```bash
+curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+source ~/.bashrc
+hermes doctor
+hermes setup        # choose OpenRouter, paste a Hermes-only key
+hermes              # CLI; gateway is optional and needs separate bot tokens
+```
+
+For a hardened, finely-controlled deployment, run Hermes in a container with
+host-side 1Password secret injection — see [`docker/hermes/`](docker/hermes/) and
+the "Containerized + 1Password (Option B)" section of
+[docs/hermes-agent.md](docs/hermes-agent.md).
 
 ## Install Locally
 
@@ -62,6 +96,9 @@ Do not commit secrets from `~/.openclaw/openclaw.json` or session logs.
 
 Operational notes:
 
+- [Hermes Agent](docs/hermes-agent.md): install Nous Research Hermes under
+  `~/.hermes` and run it in parallel with OpenClaw — coexistence model, the
+  `hermes claw migrate` / shared-bot-token / OpenRouter-key hazards, and rollback.
 - [OpenClaw GitHub authentication](docs/openclaw-github-auth.md): lessons from
   wiring `gh` and `git` credentials into Docker sandboxes where
   `sandbox_exec` runs with `HOME=/workspace`.
