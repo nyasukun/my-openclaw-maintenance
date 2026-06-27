@@ -1,170 +1,154 @@
-# Hermes Agent — install & parallel operation with OpenClaw
+# Hermes Agent — containerized, run in parallel with OpenClaw
 
 [Hermes Agent](https://hermes-agent.org/) (Nous Research, MIT, self-hosted) is the
 **second** agent stack this repository maintains, run **in parallel** with the
 OpenClaw gateway on the same host. Hermes is a persistent, self-improving personal
-agent (memory + skill creation + multi-platform gateway). It is **not** an OpenClaw
-plugin: it installs under `~/.hermes`, ships its own CLI (`hermes`) and its own
-optional messaging gateway, and is driven through the same single OpenRouter
-provider this host already standardised on (see
-[OpenRouter consolidation](openrouter-consolidation.md)).
+agent (memory + skill creation + multi-platform gateway) that executes its own
+generated code — so on this host it is **always deployed as a hardened container
+with host-side 1Password secret injection**. That is the one supported shape; bare
+`hermes` on the host is only a throwaway experiment (see the appendix), never the
+managed deployment.
 
-Like everything else here, Hermes is **deployed out to the live host**, not run from
-this repo. This document is the source-of-truth runbook; nothing Hermes-specific is
-checked in beyond docs and (optionally) skill sources.
+The deploy artifacts live in [`docker/hermes/`](../docker/hermes/)
+([README](../docker/hermes/README.md)). Like everything else here, they are
+**deployed out to the live host**, not run from this repo. This document is the
+source-of-truth runbook; nothing Hermes-specific is checked in beyond docs, the
+container build, and `op://`-reference templates (never a secret value).
 
 ## Coexistence model — two stacks, one host
 
 | | OpenClaw | Hermes |
 |---|---|---|
-| Install root | `~/.openclaw/` + this repo's deployed copies | `~/.hermes/` (source at `~/.hermes/hermes-agent`) |
-| Process / service | user systemd `openclaw-gateway.service` | `hermes` CLI; optional `hermes gateway` (own systemd unit or `nohup`) |
-| Front door | `router-agent` → concern lanes over Telegram/Slack | `hermes` CLI; optional gateway over Telegram/Discord/Slack/WhatsApp/Signal |
-| LLM inference | single `openrouter` provider (per-agent exec keyRef) | OpenRouter (its **own** key) |
-| Secrets | 1Password exec provider, per-vault per-agent snapshots | Hermes-local store under `~/.hermes` |
+| Install root | `~/.openclaw/` + this repo's deployed copies | container image `hermes:local`; state in the `hermes-data` volume |
+| Process / service | user systemd `openclaw-gateway.service` | container via user systemd `hermes.service` (compose) |
+| Front door | `router-agent` → concern lanes over Telegram/Slack | `docker compose exec hermes hermes` (CLI); optional gateway |
+| LLM inference | single `openrouter` provider (per-agent exec keyRef) | OpenRouter, its **own** key |
+| Secrets | 1Password exec provider, per-vault per-agent snapshots | host-side `op` → tmpfs env-file → container process env |
 
-The two stacks share **only the host and the OpenRouter upstream**. Keep their
-control planes, tokens, and secret stores disjoint.
+The two stacks share **only the host and the OpenRouter upstream**. Their control
+planes, tokens, and secret stores stay disjoint.
 
-## Hard coexistence constraints (read before installing)
+## Hard coexistence constraints
 
 This host enforces ★1 Azabu / ★2 foxcale GitHub-token isolation across disjoint
 1Password vaults (see [agent authz & vault model](agent-authz-vault-model.md)).
 Hermes knows nothing about that model, so the burden is on the operator:
 
-1. **Do not run `hermes claw migrate` blindly.** It imports OpenClaw personas,
-   memories, skills, **and API keys** into Hermes' single local store. That would
-   collapse the ★1/★2 vault separation by pulling cross-concern secrets into one
-   place. If you ever migrate, hand-select what crosses over — never the secrets.
-2. **Never reuse OpenClaw's bot tokens.** OpenClaw's `router-agent` already polls
-   Telegram/Slack. If Hermes' gateway uses the same bot token you get double
-   replies and `getUpdates` conflicts. Issue **separate** bot tokens for Hermes, or
-   leave the Hermes gateway off and use the `hermes` CLI only.
-3. **Give Hermes its own OpenRouter key.** Do not reuse the per-agent
-   `openrouter:default` exec keyRef that OpenClaw provisions via `secrets apply`.
-   Billing and revocation must stay independent.
-4. **Keep Hermes out of the repo's secret surface.** Hermes secrets live in
-   `~/.hermes`. `.gitignore` already excludes `.env*` / `.openclaw/`; never commit a
-   Hermes key or `~/.hermes` contents.
+1. **Hermes gets its own disjoint 1Password vault.** Disjoint from the ★1 Azabu and
+   ★2 foxcale vaults and from OpenClaw's per-agent items. Its OpenRouter key and any
+   bot tokens live only there.
+2. **Never reuse OpenClaw's OpenRouter key or bot tokens.** A shared bot token makes
+   Hermes and OpenClaw's `router-agent` double-receive the same platform; a shared
+   OpenRouter key tangles billing and revocation. Issue new, Hermes-only credentials.
+3. **Do not run `hermes claw migrate` blindly.** It imports OpenClaw personas,
+   memories, skills, **and API keys** into Hermes' single store — collapsing the
+   ★1/★2 vault separation. If you ever migrate, hand-select what crosses; never the
+   secrets.
+4. **Keep Hermes out of the repo's secret surface and OpenClaw's.** Only `op://`
+   reference templates are committed; resolved secrets are tmpfs-only. Never add
+   Hermes to OpenClaw's `vault-access-map.json` / its tests — it is a separate store.
 
-## Install
+## How it works — container + host-side 1Password
 
-Non-root user, Linux. `sudo` is requested only for optional system packages.
+Hermes has no native `op` support, so the **host's** `op` resolves the Hermes-only
+vault into a tmpfs env-file, which compose loads as the container's process env. The
+1Password token and the resolved secret values **never enter the image or the
+`/data` state volume** — only the values for Hermes' own vault reach the process.
+This mirrors OpenClaw's per-agent runtime-secret snapshots: a compromised
+self-generated Hermes skill can't pivot to a 1Password token or read beyond its own
+scope.
 
-```bash
-curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
-```
+Properties baked into `docker/hermes/`:
 
-What the installer does:
-
-- installs `uv` + Python 3.11 (and optionally Node.js 22 + Playwright/Chromium for
-  browser tools);
-- clones the source to `~/.hermes/hermes-agent`; config/data live under `~/.hermes/`
-  (`sessions/`, `logs/`, `skills/`, `cron/`, …);
-- symlinks the CLI to `~/.local/bin/hermes` and adds it to PATH via `~/.bashrc`;
-- opens **no** listening ports (the gateway is outbound-polling).
-
-Activate and sanity-check:
-
-```bash
-source ~/.bashrc
-hermes doctor      # diagnose configuration before doing anything else
-```
-
-## Configure (OpenRouter)
-
-```bash
-hermes setup
-```
-
-Choose **OpenRouter** and paste the **Hermes-only** OpenRouter API key. Switch
-models without code changes:
-
-```bash
-hermes model openrouter:<provider/model>
-```
-
-## Run
-
-CLI only (safest first step — touches nothing OpenClaw owns):
-
-```bash
-hermes
-```
-
-Optional messaging gateway — **only with fresh, non-OpenClaw bot tokens**:
-
-```bash
-hermes gateway setup    # configure platforms with NEW tokens
-hermes gateway start    # foreground, verify behaviour
-hermes gateway install  # install as background service once verified
-```
-
-OpenClaw's gateway is `openclaw-gateway.service`; the Hermes unit has a distinct
-name, so systemd coexists fine. The only real risk is **double-receiving the same
-platform** — avoid it via separate tokens.
-
-## Containerized + 1Password (Option B) — recommended
-
-For fine-grained control of this self-improving, code-executing agent, run Hermes in
-a hardened container instead of bare on the host. The deploy artifacts live in
-[`docker/hermes/`](../docker/hermes/) ([README](../docker/hermes/README.md)).
-
-The 1Password integration is **Option B**: Hermes has no native `op` support, so the
-host's `op` resolves the **Hermes-only vault** into a tmpfs env-file, which compose
-loads as the container's process env. The 1Password token and the resolved secret
-values never enter the container image or the `/data` state volume — only the values
-for Hermes' own vault reach the process, mirroring OpenClaw's per-agent
-runtime-secret snapshots. A compromised Hermes skill thus can't pivot to a token or
-read beyond its own scope.
-
-Key properties baked into `docker/hermes/`:
-
-- **State vs secrets split** — `HERMES_HOME=/data` is a named volume (sessions,
-  skills, memory — Hermes is stateful, so this persists); secrets arrive only as
-  process env and are never written to the volume or the image.
+- **State vs secrets split** — `HERMES_HOME=/data` is the `hermes-data` named volume
+  (sessions, skills, memory — Hermes is stateful, so this persists); secrets arrive
+  only as process env and are never written to the volume or the image.
 - **Hardening** — `read_only` rootfs, `cap_drop: ALL`, `no-new-privileges`,
   `pids_limit`, `mem_limit`, tmpfs scratch, and **no inbound ports** (the gateway is
   outbound-polling).
 - **Host-side materialize** — `materialize-hermes-secrets.sh` runs `op inject` over
-  `hermes.env.tpl` (which holds only `op://` references, safe to commit) into the
-  per-user tmpfs runtime dir, refusing to write onto a persistent filesystem. The
-  user systemd unit runs it as `ExecStartPre`, self-contained so it never defaults
-  to a removable path (cf. the gateway-restart vault-map landmine).
+  `hermes.env.tpl` (only `op://` references, safe to commit) into the per-user tmpfs
+  runtime dir, refusing to write onto a persistent filesystem. The user systemd unit
+  runs it as `ExecStartPre`, self-contained so it never defaults to a removable path
+  (cf. the gateway-restart vault-map landmine).
+
+## Deploy
+
+One-time:
+
+1. Create the **Hermes-only** 1Password vault (e.g. `Hermes`) per constraint 1, and
+   add the Hermes-only `OPENROUTER_API_KEY` (and, only if you run the gateway, new
+   bot tokens). Point the `op://` paths in `docker/hermes/hermes.env.tpl` at it.
+2. Set the model id: edit `HERMES_MODEL` in `docker/hermes/docker-compose.yml` to a
+   real OpenRouter model (`openrouter/<provider>/<model>`).
+3. Build the image: `cd docker/hermes && docker compose build`.
+
+Run it as a managed service (materializes secrets on every start):
+
+```bash
+cp docker/hermes/hermes.service ~/.config/systemd/user/hermes.service
+systemctl --user daemon-reload && systemctl --user enable --now hermes.service
+```
+
+Or by hand:
 
 ```bash
 cd docker/hermes
-# adjust the op:// paths in hermes.env.tpl to your Hermes-only vault, then:
-docker compose build
-./materialize-hermes-secrets.sh && docker compose up -d
-docker compose exec hermes hermes        # interactive CLI
+./materialize-hermes-secrets.sh   # host-side op -> tmpfs env-file
+docker compose up -d
 ```
 
-The hard constraints above still apply: the Hermes vault is disjoint from ★1/★2 and
-from OpenClaw's items; Hermes uses its own OpenRouter key and (if the gateway runs)
-its own bot tokens.
+## Operate
+
+```bash
+docker compose exec hermes hermes      # interactive CLI
+docker compose logs -f hermes          # gateway logs
+```
+
+The optional messaging gateway is the container's default command; it runs only
+with the **new, Hermes-only** bot tokens from `hermes.env.tpl`. Leave those
+commented out to run CLI-only and avoid any chance of double-receiving a platform
+OpenClaw already polls.
 
 ## Maintain
 
 ```bash
-hermes update     # upgrade (bare install); for the container: docker compose build --pull
-hermes doctor     # diagnose
+cd docker/hermes
+docker compose build --pull            # upgrade Hermes (rebuild the image)
+docker compose up -d                   # restart onto the new image
 ```
+
+`docker compose exec hermes hermes doctor` diagnoses configuration from inside.
 
 ## Rollback / uninstall
 
-Hermes is confined to `~/.hermes`, `~/.local/bin/hermes`, and the PATH line in your
-rc files. OpenClaw is untouched by removal.
+```bash
+systemctl --user disable --now hermes.service   # if installed
+cd docker/hermes && docker compose down
+docker volume rm hermes_hermes-data             # destroys Hermes state — be sure
+docker image rm hermes:local
+```
+
+OpenClaw is untouched by any of this; Hermes is confined to its image, the
+`hermes-data` volume, and the tmpfs secret file.
+
+## Appendix — bare install (throwaway only)
+
+For a quick local trial **outside** the managed deployment, the upstream installer
+puts Hermes under `~/.hermes` and reads secrets from process env or `~/.hermes/.env`:
 
 ```bash
-# if a gateway service was installed, stop/disable it first (name via `hermes doctor`)
-rm -rf ~/.hermes
-rm -f ~/.local/bin/hermes
-# remove the 'export PATH=...$HOME/.local/bin...' line added to ~/.bashrc (and ~/.profile)
+curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+source ~/.bashrc && hermes doctor && hermes setup   # choose OpenRouter, Hermes-only key
 ```
+
+This is not how this host runs Hermes — it has no container hardening and no
+host-side 1Password boundary. Use it only to evaluate, then remove `~/.hermes`,
+`~/.local/bin/hermes`, and the PATH line added to your rc files.
 
 ## Sources
 
 - https://hermes-agent.org/ — product overview, features, requirements.
-- `NousResearch/hermes-agent` README + `install.sh` — install behaviour, directory
-  layout, gateway, provider configuration, `hermes claw migrate`.
+- `NousResearch/hermes-agent` README + `install.sh` + env-var reference — install
+  behaviour, directory layout, gateway, env-only/headless config, `hermes claw
+  migrate`.

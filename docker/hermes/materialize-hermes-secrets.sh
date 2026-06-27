@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# HOST-SIDE secret materialization for the containerized Hermes (Option B).
+# HOST-SIDE secret materialization for the containerized Hermes.
 #
 # Resolves the Hermes-only 1Password vault into a tmpfs env-file that docker
 # compose loads as the container's process env. The 1Password token (your `op`

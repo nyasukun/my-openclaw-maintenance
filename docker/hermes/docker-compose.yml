@@ -1,4 +1,4 @@
-# Containerized Hermes Agent, run in parallel with the OpenClaw gateway (Option B).
+# Containerized Hermes Agent, run in parallel with the OpenClaw gateway.
 # Bring up:  ./materialize-hermes-secrets.sh && docker compose up -d
 # CLI:       docker compose exec hermes hermes
 # Logs:      docker compose logs -f hermes

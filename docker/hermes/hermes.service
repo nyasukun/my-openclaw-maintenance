@@ -1,4 +1,4 @@
-# User systemd unit for the containerized Hermes (Option B), parallel to OpenClaw.
+# User systemd unit for the containerized Hermes, parallel to OpenClaw.
 # Install:
 #   cp docker/hermes/hermes.service ~/.config/systemd/user/hermes.service
 #   # edit %h paths below if this repo lives elsewhere

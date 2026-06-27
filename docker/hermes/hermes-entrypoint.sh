@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Container entrypoint. Option B: secrets are expected in the PROCESS ENV, injected
+# Container entrypoint. Secrets are expected in the PROCESS ENV, injected
 # by compose `env_file` from the host-side `op`-resolved tmpfs file. We assert
 # presence only and never print a value (repo redaction convention).
 set -euo pipefail

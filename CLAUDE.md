@@ -10,10 +10,12 @@ maintaining the operator's **two parallel agent stacks** on one host: **OpenClaw
 ([Nous Research Hermes](https://hermes-agent.org/), a self-hosted persistent agent
 installed under `~/.hermes`). The two share only the host and the single OpenRouter
 upstream; their control planes, tokens, and secret stores stay disjoint. Hermes is
-a standalone stack, **not** an OpenClaw plugin — its install + coexistence runbook
-is `docs/hermes-agent.md`, and the hard coexistence constraints (never run
-`hermes claw migrate` blindly, never reuse OpenClaw's bot tokens, give Hermes its
-own OpenRouter key) live there. Everything below concerns the OpenClaw stack unless
+a standalone stack, **not** an OpenClaw plugin, and on this host it is **always
+deployed as a hardened container with host-side 1Password secret injection** (the
+`docker/hermes/` artifacts) — bare `~/.hermes` install is a throwaway-experiment
+escape hatch only. Its runbook and hard coexistence constraints (own disjoint vault,
+Hermes-only OpenRouter key/bot tokens, never run `hermes claw migrate` blindly) live
+in `docs/hermes-agent.md`. Everything below concerns the OpenClaw stack unless
 stated otherwise.
 
 It holds three kinds of artifact, each deployed *out* to a live host rather than

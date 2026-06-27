@@ -1,4 +1,4 @@
-# Hermes secret references — Option B template. SAFE TO COMMIT: this file holds
+# Hermes secret references template. SAFE TO COMMIT: this file holds
 # only `op://` references, never values. `materialize-hermes-secrets.sh` runs
 # `op inject` over it on the host and writes the resolved KEY=VALUE file to tmpfs;
 # that resolved file is git-ignored (.env*) and never enters the image or volume.

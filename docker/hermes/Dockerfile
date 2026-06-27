@@ -1,6 +1,6 @@
 # Hermes Agent — containerized, run in parallel with the OpenClaw gateway.
 #
-# Option B (host resolves secrets): NO 1Password token or secret value is baked
+# Host resolves secrets: NO 1Password token or secret value is baked
 # into this image. Code (venv + source) lives in the image; runtime *state* lives
 # in the /data volume (HERMES_HOME); *secrets* arrive only via the container's
 # process env (compose `env_file`), materialized on the host by `op`. See

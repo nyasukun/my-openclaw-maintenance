@@ -33,24 +33,26 @@ deployed copies.
 
 ## Hermes Agent
 
-Hermes is a standalone stack (it is **not** an OpenClaw plugin) installed under
-`~/.hermes` and run in parallel with the OpenClaw gateway. Install and coexistence
-rules — including the hard constraints (never run `hermes claw migrate` blindly,
-never reuse OpenClaw's bot tokens, give Hermes its own OpenRouter key) — live in
-[docs/hermes-agent.md](docs/hermes-agent.md). Quick start:
+Hermes is a standalone stack (it is **not** an OpenClaw plugin), run in parallel
+with the OpenClaw gateway. On this host it is **always deployed as a hardened
+container with host-side 1Password secret injection** — the deploy artifacts are in
+[`docker/hermes/`](docker/hermes/) and the runbook (coexistence model + the hard
+constraints: own disjoint vault, Hermes-only OpenRouter key/bot tokens, never run
+`hermes claw migrate` blindly) is in [docs/hermes-agent.md](docs/hermes-agent.md).
+Deploy:
 
 ```bash
-curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
-source ~/.bashrc
-hermes doctor
-hermes setup        # choose OpenRouter, paste a Hermes-only key
-hermes              # CLI; gateway is optional and needs separate bot tokens
+cd docker/hermes
+# point hermes.env.tpl op:// refs at the Hermes-only vault; set HERMES_MODEL in compose
+docker compose build
+./materialize-hermes-secrets.sh && docker compose up -d
+docker compose exec hermes hermes        # interactive CLI
 ```
 
-For a hardened, finely-controlled deployment, run Hermes in a container with
-host-side 1Password secret injection — see [`docker/hermes/`](docker/hermes/) and
-the "Containerized + 1Password (Option B)" section of
-[docs/hermes-agent.md](docs/hermes-agent.md).
+The `op` session stays on the host; only the resolved values for Hermes' own vault
+reach the container process — never a 1Password token, never the `/data` state
+volume. Bare `~/.hermes` install is a throwaway-experiment escape hatch only (see
+the doc appendix), not the managed deployment.
 
 ## Install Locally
 

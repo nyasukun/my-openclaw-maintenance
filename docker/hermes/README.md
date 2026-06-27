@@ -1,9 +1,11 @@
-# docker/hermes — containerized Hermes (Option B)
+# docker/hermes — containerized Hermes
 
-Run [Hermes Agent](https://hermes-agent.org/) in a hardened container, in parallel
-with the OpenClaw gateway, with secrets supplied by **host-side 1Password** — no
-`op` token and no secret value ever enters the container. Background and the hard
-coexistence constraints: [`../../docs/hermes-agent.md`](../../docs/hermes-agent.md).
+The managed deployment for [Hermes Agent](https://hermes-agent.org/): a hardened
+container run in parallel with the OpenClaw gateway, with secrets supplied by
+**host-side 1Password** — no `op` token and no secret value ever enters the
+container. This is the one supported shape on this host (bare `~/.hermes` install is
+a throwaway-experiment escape hatch only). Background and the hard coexistence
+constraints: [`../../docs/hermes-agent.md`](../../docs/hermes-agent.md).
 
 ## Files
 
@@ -38,7 +40,7 @@ docker compose logs -f hermes          # gateway logs
 Or manage it as a service: `cp hermes.service ~/.config/systemd/user/ &&
 systemctl --user enable --now hermes.service` (materializes secrets on every start).
 
-## Why Option B
+## Why host-side 1Password
 
 The `op` session stays on the host; the container receives only the resolved
 values for its own vault, as process env. A compromised self-generated Hermes skill
