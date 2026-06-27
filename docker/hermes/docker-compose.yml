@@ -22,8 +22,9 @@ services:
       HERMES_HOME: /data
       HERMES_IGNORE_USER_CONFIG: "1"
       # Non-secret behaviour setting (kept out of the secret env-file on purpose).
-      # Set to a real OpenRouter model id, e.g. "openrouter/<provider>/<model>".
-      HERMES_MODEL: ${HERMES_MODEL:-}
+      # OpenRouter model slug. Owl Alpha (free, agentic, 1M+ ctx, tool use).
+      # If Hermes needs a provider prefix, set via `hermes model openrouter:openrouter/owl-alpha`.
+      HERMES_MODEL: ${HERMES_MODEL:-openrouter/owl-alpha}
 
     # No inbound ports — the gateway is outbound-polling.
 

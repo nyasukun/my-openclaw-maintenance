@@ -25,6 +25,14 @@ case "$fstype" in
   *) echo "refusing to write secrets to non-tmpfs ($fstype): $(dirname "$OUT")" >&2; exit 1 ;;
 esac
 
+# op must be authenticated. Unattended (systemd) → a 1Password Service Account
+# token (OP_SERVICE_ACCOUNT_TOKEN, scoped to the Hermes-only vault). By hand → an
+# interactive `op signin` session. Fail early with a clear message otherwise.
+if ! op whoami >/dev/null 2>&1; then
+  echo "1Password CLI not authenticated. Set OP_SERVICE_ACCOUNT_TOKEN (service) or run 'op signin' (by hand)." >&2
+  exit 1
+fi
+
 umask 077
 op inject -i "$TPL" -o "$OUT"
 

@@ -77,11 +77,31 @@ Properties baked into `docker/hermes/`:
 One-time:
 
 1. Create the **Hermes-only** 1Password vault (e.g. `Hermes`) per constraint 1, and
-   add the Hermes-only `OPENROUTER_API_KEY` (and, only if you run the gateway, new
-   bot tokens). Point the `op://` paths in `docker/hermes/hermes.env.tpl` at it.
+   add the Hermes-only OpenRouter key as `op://Hermes/openrouter/credential` (and,
+   only if you run the gateway, new bot tokens). `provision-1password.sh` does this
+   for you from a signed-in `op` session (vault + key item, key read from stdin);
+   point the `op://` paths in `hermes.env.tpl` at whatever vault/item you use.
 2. Set the model id: edit `HERMES_MODEL` in `docker/hermes/docker-compose.yml` to a
    real OpenRouter model (`openrouter/<provider>/<model>`).
 3. Build the image: `cd docker/hermes && docker compose build`.
+
+`op inject` resolves **every** reference in `hermes.env.tpl`, including ones on
+`#`-commented lines, and it does not write the reference scheme in prose — keep only
+references you actually want resolved in that file.
+
+The host-side `op` must be authenticated when secrets are materialized:
+
+- **Managed service (unattended):** a systemd `--user` `ExecStartPre` has no
+  interactive session, so give it a **1Password Service Account token scoped to the
+  Hermes-only vault**. The token lives host-side only and never enters the container:
+
+  ```bash
+  mkdir -p ~/.config/hermes
+  printf 'OP_SERVICE_ACCOUNT_TOKEN=%s\n' "ops_..." > ~/.config/hermes/op.env
+  chmod 600 ~/.config/hermes/op.env          # the unit loads this via EnvironmentFile
+  ```
+
+- **By hand:** an interactive `op signin` session in your shell is enough.
 
 Run it as a managed service (materializes secrets on every start):
 
@@ -90,7 +110,7 @@ cp docker/hermes/hermes.service ~/.config/systemd/user/hermes.service
 systemctl --user daemon-reload && systemctl --user enable --now hermes.service
 ```
 
-Or by hand:
+Or by hand (after `op signin`):
 
 ```bash
 cd docker/hermes

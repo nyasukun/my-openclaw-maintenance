@@ -11,11 +11,19 @@
 Description=Hermes Agent (containerized, parallel to OpenClaw)
 After=docker.service network-online.target
 Wants=network-online.target
+# Stop hammering on a misconfig: give up after 3 failures in 2 min.
+StartLimitIntervalSec=120
+StartLimitBurst=3
 
 [Service]
 Type=simple
 WorkingDirectory=%h/work/my-openclaw-maintenance/docker/hermes
 Environment=HERMES_SECRETS_ENV=%t/hermes-secrets/hermes.env
+# 1Password auth for the unattended `op inject` in ExecStartPre. Put a
+# vault-scoped Service Account token here (chmod 600), host-side only — it never
+# enters the container. Optional ("-") so a by-hand interactive `op signin` works.
+#   echo 'OP_SERVICE_ACCOUNT_TOKEN=ops_...' > ~/.config/hermes/op.env && chmod 600 ~/.config/hermes/op.env
+EnvironmentFile=-%h/.config/hermes/op.env
 # Self-contained materialize — no removable default paths (cf. vault-map landmine).
 ExecStartPre=%h/work/my-openclaw-maintenance/docker/hermes/materialize-hermes-secrets.sh
 ExecStart=/usr/bin/docker compose up

@@ -14,6 +14,7 @@ constraints: [`../../docs/hermes-agent.md`](../../docs/hermes-agent.md).
 | `Dockerfile` | bakes the Hermes install (code/venv) into `hermes:local`; **no secrets baked** |
 | `hermes-entrypoint.sh` | asserts `OPENROUTER_API_KEY` is present (redacted), then `exec`s Hermes |
 | `hermes.env.tpl` | **`op://` references only** (safe to commit); the resolved file is tmpfs-only |
+| `provision-1password.sh` | create the Hermes-only vault + OpenRouter key item from a signed-in `op` session |
 | `materialize-hermes-secrets.sh` | host-side `op inject` → tmpfs env-file (refuses non-tmpfs) |
 | `docker-compose.yml` | volume for `/data` state, `env_file` for secrets, rootfs/cap/pids/mem hardening |
 | `hermes.service` | user systemd unit; `ExecStartPre` materializes secrets into `%t` (tmpfs) |
