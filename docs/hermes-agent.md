@@ -162,8 +162,18 @@ Env vars (token enables the platform; allowlist is a CSV of user ids):
 
 Steps (Telegram example):
 
-1. Create a new bot via Telegram @BotFather → get its token; note your numeric user
-   id (e.g. from @userinfobot).
+1. Create a new bot and find your user id, in the Telegram app:
+   - Open a chat with **@BotFather** → send `/newbot`.
+   - Give it a **display name** (e.g. `Hermes`), then a **username** that must end in
+     `bot` (e.g. `yasu_hermes_bot`). This is a brand-new bot, separate from
+     OpenClaw's — do not reuse OpenClaw's bot.
+   - BotFather replies with the **token**, like `123456789:AAH...`. That is the
+     secret for the next step.
+   - (optional) `/setprivacy` → *Disable* lets the bot see all group messages;
+     leave *Enabled* if you only DM it. `/setdescription`, `/setcommands` as desired.
+   - Get your **numeric user id**: message **@userinfobot** (or @RawDataBot); it
+     replies with `Id: 123456789`. That is `TELEGRAM_ALLOWED_USERS`.
+   - Press **Start** in a chat with your new bot so it is allowed to message you.
 2. Store the token in the Hermes-only vault, e.g. item `telegram-hermes`, field
    `token`.
 3. Add an **active** reference line to `docker/hermes/hermes.env.tpl` (not a `#`
