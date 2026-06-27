@@ -81,9 +81,17 @@ One-time:
    only if you run the gateway, new bot tokens). `provision-1password.sh` does this
    for you from a signed-in `op` session (vault + key item, key read from stdin);
    point the `op://` paths in `hermes.env.tpl` at whatever vault/item you use.
-2. Set the model id: edit `HERMES_MODEL` in `docker/hermes/docker-compose.yml` to a
-   real OpenRouter model (`openrouter/<provider>/<model>`).
-3. Build the image: `cd docker/hermes && docker compose build`.
+2. Model: `docker-compose.yml` pins **Owl Alpha** on OpenRouter by default
+   (`openrouter/owl-alpha`, free/agentic). `hermes model` is interactive-only and
+   can't run in the build, so the default is set via env across all code paths
+   (`HERMES_INFERENCE_PROVIDER`/`HERMES_INFERENCE_MODEL` for `-z`/inference,
+   `HERMES_MODEL` for cron, `HERMES_TUI_PROVIDER` for chat). Change those to switch
+   models.
+3. Build the image: `cd docker/hermes && docker compose build`. The image carries
+   no Chromium — the build passes `--skip-browser` (Playwright system deps need
+   sudo), so `browser`/`computer_use` skills are inactive; add them in a derived
+   image if needed. The container runs `hermes gateway run` as its main process and
+   idles safely with no messaging platforms configured.
 
 `op inject` resolves **every** reference in `hermes.env.tpl`, including ones on
 `#`-commented lines, and it does not write the reference scheme in prose — keep only
@@ -121,8 +129,10 @@ docker compose up -d
 ## Operate
 
 ```bash
-docker compose exec hermes hermes      # interactive CLI
-docker compose logs -f hermes          # gateway logs
+docker compose exec hermes hermes                 # interactive chat (TUI)
+docker compose exec -T hermes hermes -z "PROMPT"  # one-shot, non-interactive
+docker compose exec -T hermes hermes doctor       # config/connectivity check
+docker compose logs -f hermes                     # gateway logs
 ```
 
 The optional messaging gateway is the container's default command; it runs only

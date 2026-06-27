@@ -21,10 +21,15 @@ services:
     environment:
       HERMES_HOME: /data
       HERMES_IGNORE_USER_CONFIG: "1"
-      # Non-secret behaviour setting (kept out of the secret env-file on purpose).
-      # OpenRouter model slug. Owl Alpha (free, agentic, 1M+ ctx, tool use).
-      # If Hermes needs a provider prefix, set via `hermes model openrouter:openrouter/owl-alpha`.
+      # Non-secret behaviour settings (kept out of the secret env-file on purpose).
+      # Default to Owl Alpha (free, agentic, 1M+ ctx, tool use) on OpenRouter.
+      # `hermes model` is interactive-only, so we pin the default via env across all
+      # code paths: HERMES_INFERENCE_* (oneshot/-z + inference), HERMES_MODEL (cron),
+      # HERMES_TUI_PROVIDER (chat). Verified end-to-end with `hermes -z`.
+      HERMES_INFERENCE_PROVIDER: ${HERMES_INFERENCE_PROVIDER:-openrouter}
+      HERMES_INFERENCE_MODEL: ${HERMES_INFERENCE_MODEL:-openrouter/owl-alpha}
       HERMES_MODEL: ${HERMES_MODEL:-openrouter/owl-alpha}
+      HERMES_TUI_PROVIDER: ${HERMES_TUI_PROVIDER:-openrouter}
 
     # No inbound ports — the gateway is outbound-polling.
 
