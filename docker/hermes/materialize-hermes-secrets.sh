@@ -34,7 +34,9 @@ if ! op whoami >/dev/null 2>&1; then
 fi
 
 umask 077
-op inject -i "$TPL" -o "$OUT"
+# -f: overwrite a stale tmpfs env-file without an interactive confirmation prompt
+# (systemd ExecStartPre is non-interactive; without -f `op inject` aborts).
+op inject -f -i "$TPL" -o "$OUT"
 
 # Redacted verification only — report presence, never the value.
 if grep -q '^OPENROUTER_API_KEY=.\+' "$OUT"; then
