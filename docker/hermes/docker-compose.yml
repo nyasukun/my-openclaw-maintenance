@@ -20,7 +20,10 @@ services:
 
     environment:
       HERMES_HOME: /data
-      HERMES_IGNORE_USER_CONFIG: "1"
+      # NOTE: do NOT set HERMES_IGNORE_USER_CONFIG=1 — it makes Hermes ignore
+      # /data/config.yaml, and the gateway conversation loop reads its default model
+      # from there (the HERMES_INFERENCE_* env only covers oneshot/-z). With it on,
+      # Telegram replies fail with "No models provided" (empty model).
       # Redirect the XDG state dir (gateway locks etc.) onto the writable /data
       # volume — the image rootfs is read-only, so ~/.local/state can't be written.
       XDG_STATE_HOME: /data/state

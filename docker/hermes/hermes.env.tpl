@@ -15,3 +15,4 @@
 # each pointing at its own reference in the Hermes vault.
 
 OPENROUTER_API_KEY=op://Hermes/openrouter/credential
+TELEGRAM_BOT_TOKEN=op://Hermes/telegram-hermes/token
