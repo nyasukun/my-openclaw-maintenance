@@ -201,6 +201,24 @@ Steps (Telegram example):
 Then message the bot. Slack/Discord follow the same pattern with their env vars
 above (Slack needs both `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN`).
 
+## Web search & extract
+
+Web tooling is split by capability (config under `web.*`, set by the entrypoint):
+
+- **search** → `ddgs` (DuckDuckGo): keyless, free, unlimited. The `ddgs` package is
+  baked into the image, so `web_search` works out of the box.
+- **extract** (fetch a URL's full page body) → `tavily`: `ddgs` is search-only, so
+  URL extraction uses Tavily, which needs `TAVILY_API_KEY`. Until that key is
+  provisioned, `web_extract` is inactive (search still works); the agent will say
+  the extract backend is unavailable rather than silently using a search-only one.
+
+To enable extract: create a Tavily free-tier key, store it in the Hermes vault as
+item `tavily`, add `TAVILY_API_KEY=op://Hermes/tavily/credential` to
+`hermes.env.tpl` **only after the item exists** (`op inject` resolves every
+reference and fails on a missing one), then materialize + restart. The other
+extract-capable providers (exa/firecrawl/parallel) are also key-based; ddgs and
+brave-free are the keyless options but search-only.
+
 ## Persistence, memory & growth
 
 Hermes is "self-improving": it accumulates **persistent memory** and **agent-generated

@@ -16,11 +16,14 @@ if [ -n "${HERMES_INFERENCE_MODEL:-}" ]; then
   hermes config set model.default "${HERMES_INFERENCE_MODEL}" >/dev/null 2>&1 || true
 fi
 
-# Default web search to the keyless ddgs (DuckDuckGo) backend so `web_search` works
-# out of the box (exa/tavily/firecrawl/brave-free need API keys). The `ddgs` package
-# is baked into the image; here we just point the config at it.
+# Web tooling split by capability:
+#  - search  -> ddgs (DuckDuckGo): keyless, free, unlimited (baked into the image).
+#  - extract -> tavily: ddgs can't fetch page bodies, so URL extraction uses Tavily,
+#    which needs TAVILY_API_KEY (injected from 1Password via the env-file). Until
+#    that key is present, web_extract reports a missing key rather than silently
+#    falling back to a search-only backend.
 hermes config set web.search_backend ddgs >/dev/null 2>&1 || true
-hermes config set web.backend ddgs >/dev/null 2>&1 || true
+hermes config set web.extract_backend tavily >/dev/null 2>&1 || true
 
 # Ensure the `/moa` escalation preset uses Fugu Ultra (paid, on-demand) — a single
 # stronger model for "core" questions that auto-restores the default afterward. The
