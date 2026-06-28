@@ -27,6 +27,13 @@ services:
       # Redirect the XDG state dir (gateway locks etc.) onto the writable /data
       # volume — the image rootfs is read-only, so ~/.local/state can't be written.
       XDG_STATE_HOME: /data/state
+      # Full autonomy INSIDE the sandbox: bypass dangerous-command approval and
+      # auto-accept shell hooks (read globally incl. the gateway agent, see
+      # tools/approval.py). Safe because the container is the cage — read-only
+      # rootfs, no host/OpenClaw/secret-token reach; capability changes only land
+      # via the externally-audited image. See docs/hermes-agent.md "Autonomy".
+      HERMES_YOLO_MODE: "1"
+      HERMES_ACCEPT_HOOKS: "1"
       # Non-secret behaviour settings (kept out of the secret env-file on purpose).
       # Default to Owl Alpha (free, agentic, 1M+ ctx, tool use) on OpenRouter.
       # `hermes model` is interactive-only, so we pin the default via env across all

@@ -241,6 +241,34 @@ preset (`fugu`) pointing at `sakana/fugu-ultra`, so **`/moa <question>`** runs a
 single turn through Fugu Ultra and **auto-restores** the default afterward — no
 `/model` toggle needed.
 
+## Autonomy & external productivity audit
+
+Hermes runs with **full autonomy inside the sandbox**: `HERMES_YOLO_MODE=1` and
+`HERMES_ACCEPT_HOOKS=1` (compose) make the gateway agent bypass dangerous-command
+approval and auto-accept shell hooks — it executes tools and self-authors skills
+without prompting. This is deliberate: **the container is the cage.** Read-only
+rootfs, `cap_drop: ALL`, no host/OpenClaw reach, and the 1Password token never
+enters the container, so the blast radius is the container + `/data` + outbound
+network. (Egress is currently open — restrict it at the compose/iptables layer if
+you ever want to bound that too.)
+
+Because the rootfs is read-only, Hermes **cannot evolve its own image** — new
+packages/tools only persist if baked into the Dockerfile. So capability growth is a
+**supervised loop**: Hermes runs free; periodically an external auditor (Claude Code
+or Codex on the host) reviews how it's doing and proposes image/config/skill updates
+as a **PR** — never an unattended redeploy. Run it on demand:
+
+```bash
+docker/hermes/audit/collect-signals.sh        # no-LLM: gaps, self-authored skills, errors
+# then drive the audit with the skill (Claude Code / Codex):
+#   "use the hermes-productivity-audit skill"
+```
+
+The [`hermes-productivity-audit`](../skills/hermes-productivity-audit/SKILL.md) skill
+encodes the rules: translate capability gaps → Dockerfile/config changes, verify the
+build, open a PR with the apply steps, and **keep the cage intact** (read-only,
+secret boundary, `/data` preserved). A human reviews, merges, then rebuilds/redeploys.
+
 ## Maintain
 
 Upgrades keep the `hermes-data` volume (memory + learned skills persist):

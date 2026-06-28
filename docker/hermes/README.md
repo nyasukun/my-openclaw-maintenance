@@ -19,6 +19,7 @@ constraints: [`../../docs/hermes-agent.md`](../../docs/hermes-agent.md).
 | `docker-compose.yml` | volume for `/data` state, `env_file` for secrets, rootfs/cap/pids/mem hardening |
 | `hermes.service` | user systemd unit; `ExecStartPre` materializes secrets into `%t` (tmpfs) |
 | `backup-hermes-data.sh` | snapshot the `hermes-data` volume (memory + learned skills) to a tgz |
+| `audit/collect-signals.sh` | no-LLM productivity-audit report (gaps, self-authored skills, errors) for the [`hermes-productivity-audit`](../../skills/hermes-productivity-audit/SKILL.md) skill |
 
 ## One-time setup
 
