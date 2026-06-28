@@ -236,9 +236,10 @@ the *core* questions, escalate **manually** per conversation, in the chat itself
 
 `sakana/fugu-ultra` (Sakana AI) is itself a quality-first multi-step orchestrator —
 but it is **paid** (~$5/$30 per M tokens), so escalate deliberately. `--session`
-scopes the switch to that conversation. Alternatively configure a one-model `/moa`
-preset (`hermes moa configure`) pointing at `sakana/fugu-ultra` and use
-`/moa <question>` for a single turn that **auto-restores** the default afterward.
+scopes the switch to that conversation. The entrypoint also preconfigures a `/moa`
+preset (`fugu`) pointing at `sakana/fugu-ultra`, so **`/moa <question>`** runs a
+single turn through Fugu Ultra and **auto-restores** the default afterward — no
+`/model` toggle needed.
 
 ## Maintain
 
