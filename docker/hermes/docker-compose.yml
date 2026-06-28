@@ -2,72 +2,72 @@
 # Bring up:  ./materialize-hermes-secrets.sh && docker compose up -d
 # CLI:       docker compose exec hermes hermes
 # Logs:      docker compose logs -f hermes
+# Remote desktop gateway (opt-in): docker compose --profile dashboard up -d
+
+# Shared hardening + mounts for every Hermes container (the cage).
+x-hermes-common: &hermes-common
+  image: hermes:local
+  restart: unless-stopped
+  # State only (sessions/skills/memory). Secrets are NEVER written here.
+  volumes:
+    - hermes-data:/data
+  # Secrets reach Hermes ONLY as process env, from the host-resolved tmpfs file.
+  env_file:
+    - ${HERMES_SECRETS_ENV:-/run/user/1000/hermes-secrets/hermes.env}
+  read_only: true                 # immutable rootfs; only /data + tmpfs are writable
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  pids_limit: 512
+  mem_limit: 4g
+  tmpfs:
+    - /tmp
+    - /home/hermes/.cache         # uv/python scratch under XDG_CACHE_HOME
+
+# Shared non-secret behaviour env. Secrets stay in the env-file, not here.
+x-hermes-env: &hermes-env
+  HERMES_HOME: /data
+  # Redirect the XDG state dir (gateway locks etc.) onto the writable /data volume —
+  # the rootfs is read-only, so ~/.local/state can't be written.
+  XDG_STATE_HOME: /data/state
+  # Full autonomy INSIDE the sandbox (read globally incl. the gateway agent, see
+  # tools/approval.py). Safe because the container is the cage. See docs "Autonomy".
+  HERMES_YOLO_MODE: "1"
+  HERMES_ACCEPT_HOOKS: "1"
+  # `:online` enables OpenRouter server-side web search (Exa: search + page read) for
+  # the interactive/gateway model — searches only when needed (~$0.005/search), no
+  # extra keys. Cron stays on plain owl-alpha (no search cost on automated turns).
+  HERMES_INFERENCE_PROVIDER: ${HERMES_INFERENCE_PROVIDER:-openrouter}
+  HERMES_INFERENCE_MODEL: ${HERMES_INFERENCE_MODEL:-openrouter/owl-alpha:online}
+  HERMES_MODEL: ${HERMES_MODEL:-openrouter/owl-alpha}
+  HERMES_TUI_PROVIDER: ${HERMES_TUI_PROVIDER:-openrouter}
+
 services:
+  # Messaging gateway (Telegram). Outbound-polling, so no inbound ports.
   hermes:
+    <<: *hermes-common
     build: .
-    image: hermes:local
     container_name: hermes
-    restart: unless-stopped
-
-    # State only (sessions/skills/memory). Hermes is stateful — this volume is the
-    # point of the deployment. Secrets are NEVER written here.
-    volumes:
-      - hermes-data:/data
-
-    # Secrets reach Hermes ONLY as process env, from the host-resolved tmpfs file.
-    env_file:
-      - ${HERMES_SECRETS_ENV:-/run/user/1000/hermes-secrets/hermes.env}
-
     environment:
-      HERMES_HOME: /data
-      # NOTE: do NOT set HERMES_IGNORE_USER_CONFIG=1 — it makes Hermes ignore
-      # /data/config.yaml, and the gateway conversation loop reads its default model
-      # from there (the HERMES_INFERENCE_* env only covers oneshot/-z). With it on,
-      # Telegram replies fail with "No models provided" (empty model).
-      # Redirect the XDG state dir (gateway locks etc.) onto the writable /data
-      # volume — the image rootfs is read-only, so ~/.local/state can't be written.
-      XDG_STATE_HOME: /data/state
-      # Full autonomy INSIDE the sandbox: bypass dangerous-command approval and
-      # auto-accept shell hooks (read globally incl. the gateway agent, see
-      # tools/approval.py). Safe because the container is the cage — read-only
-      # rootfs, no host/OpenClaw/secret-token reach; capability changes only land
-      # via the externally-audited image. See docs/hermes-agent.md "Autonomy".
-      HERMES_YOLO_MODE: "1"
-      HERMES_ACCEPT_HOOKS: "1"
-      # Non-secret behaviour settings (kept out of the secret env-file on purpose).
-      # Default to Owl Alpha (free, agentic, 1M+ ctx, tool use) on OpenRouter.
-      # `hermes model` is interactive-only, so we pin the default via env across all
-      # code paths: HERMES_INFERENCE_* (oneshot/-z + inference), HERMES_MODEL (cron),
-      # HERMES_TUI_PROVIDER (chat). Verified end-to-end with `hermes -z`.
-      HERMES_INFERENCE_PROVIDER: ${HERMES_INFERENCE_PROVIDER:-openrouter}
-      # `:online` enables OpenRouter's server-side web search (Exa: search + page
-      # read) for the interactive/gateway model — the model searches only when it
-      # needs to (~$0.005/search). This is the primary web capability; ddgs stays as
-      # a free local-tool fallback. Cron stays on plain owl-alpha (no search cost).
-      HERMES_INFERENCE_MODEL: ${HERMES_INFERENCE_MODEL:-openrouter/owl-alpha:online}
-      HERMES_MODEL: ${HERMES_MODEL:-openrouter/owl-alpha}
-      HERMES_TUI_PROVIDER: ${HERMES_TUI_PROVIDER:-openrouter}
-      # Messaging gateway allowlists (non-secret user-id CSVs). The bot TOKENS go in
-      # hermes.env.tpl (1Password), NOT here. Without an allowlist all users are
-      # denied. See "Messaging gateway" in docs/hermes-agent.md.
+      <<: *hermes-env
+      # Messaging allowlist (non-secret user-id CSV); bot TOKENS live in 1Password.
       TELEGRAM_ALLOWED_USERS: "5089072082"
-      # SLACK_ALLOWED_USERS: "U0123456789"
-      # DISCORD_ALLOWED_USERS: "123456789012345678"
+    # CMD from the image: hermes gateway run
 
-    # No inbound ports — the gateway is outbound-polling.
-
-    # Fine-grained control of the self-improving agent:
-    read_only: true                 # immutable rootfs; only /data + tmpfs are writable
-    cap_drop: [ALL]
-    security_opt:
-      - no-new-privileges:true
-    pids_limit: 512
-    mem_limit: 4g
-    tmpfs:
-      - /tmp
-      - /home/hermes/.cache         # uv/python/playwright scratch under XDG_CACHE_HOME
-    # If a skill needs more writable paths, relax read_only or add a named tmpfs —
-    # do NOT mount host paths or the OpenClaw workspace in here.
+  # Remote gateway for the Hermes Desktop app (opt-in: `--profile dashboard`).
+  # Serves the dashboard/web_server the desktop attaches to over the network. Binds
+  # 0.0.0.0 inside the container (required for Docker port publish) → the dashboard
+  # FORCES an auth provider. Published to host loopback only; expose to the laptop
+  # via `tailscale serve` (TLS, tailnet-only) — never a public bind. Shares /data.
+  hermes-dashboard:
+    <<: *hermes-common
+    container_name: hermes-dashboard
+    profiles: ["dashboard"]
+    environment:
+      <<: *hermes-env
+    command: ["hermes", "dashboard", "--host", "0.0.0.0", "--port", "9119", "--no-open", "--skip-build"]
+    ports:
+      - "127.0.0.1:9119:9119"
 
 volumes:
   hermes-data:

@@ -289,6 +289,38 @@ encodes the rules: translate capability gaps → Dockerfile/config changes, veri
 build, open a PR with the apply steps, and **keep the cage intact** (read-only,
 secret boundary, `/data` preserved). A human reviews, merges, then rebuilds/redeploys.
 
+## Remote gateway for the Hermes Desktop app
+
+The **Hermes Desktop** (Electron) app can attach to this container as a remote
+backend. It connects to Hermes' web server (`hermes dashboard`, port **9119**), which
+shares the same `/data` (memory, skills, sessions) as the messaging gateway.
+
+This is **opt-in** (compose profile `dashboard`) because it opens an inbound,
+authenticated endpoint — a deliberate exception to the otherwise inbound-free cage.
+The dashboard exposes config/API-keys/sessions/agent control, so it is **tailnet-only
++ authenticated**, never a public bind:
+
+- The image **builds the dashboard web UI** into `hermes_cli/web_dist` (the package
+  ships source only), so `hermes dashboard --skip-build` serves it on the read-only
+  rootfs.
+- The `hermes-dashboard` service binds `0.0.0.0:9119` inside the container (required
+  for Docker port publish) → the dashboard **forces basic-auth**. The entrypoint
+  derives `dashboard.basic_auth` from `HERMES_DASHBOARD_PASSWORD` (injected from
+  1Password — no credential in the image/repo). Published to **host loopback only**
+  (`127.0.0.1:9119`); reach it from the laptop via **`tailscale serve`** (TLS,
+  tailnet-only). The container stays on the isolated bridge network (no host reach).
+
+Setup:
+
+1. Create the dashboard password in the Hermes vault (item `dashboard`, field
+   `password`), then add `HERMES_DASHBOARD_PASSWORD=op://Hermes/dashboard/password`
+   to `hermes.env.tpl` (only after the item exists), materialize.
+2. Start it: `docker compose --profile dashboard up -d hermes-dashboard`.
+3. Expose over Tailscale (host): `tailscale serve --bg --https 443 127.0.0.1:9119`
+   → `https://<host>.<tailnet>.ts.net`.
+4. In Hermes Desktop on the laptop (same tailnet), set the remote backend URL to that
+   `https://…ts.net` and log in with username `hermes` + the password.
+
 ## Maintain
 
 Upgrades keep the `hermes-data` volume (memory + learned skills persist):

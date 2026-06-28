@@ -22,6 +22,26 @@ fi
 # pages; the key-based extract providers like Tavily are intentionally not wired.)
 hermes config set web.search_backend ddgs >/dev/null 2>&1 || true
 
+# Dashboard (remote gateway for Hermes Desktop) basic-auth. The 0.0.0.0 bind forces
+# an auth provider; derive its password hash from HERMES_DASHBOARD_PASSWORD (injected
+# from 1Password) so no credential is baked into the image or repo. Only runs when
+# the password is provided; the dashboard service stays opt-in (compose profile).
+if [ -n "${HERMES_DASHBOARD_PASSWORD:-}" ]; then
+  "$HOME/.hermes/hermes-agent/venv/bin/python" - <<'PY' 2>/dev/null || true
+import os, yaml
+from plugins.dashboard_auth.basic import hash_password
+p = "/data/config.yaml"
+try:
+    c = yaml.safe_load(open(p)) or {}
+except FileNotFoundError:
+    c = {}
+ba = c.setdefault("dashboard", {}).setdefault("basic_auth", {})
+ba["username"] = os.environ.get("HERMES_DASHBOARD_USER", "hermes")
+ba["password_hash"] = hash_password(os.environ["HERMES_DASHBOARD_PASSWORD"])
+yaml.safe_dump(c, open(p, "w"), sort_keys=False)
+PY
+fi
+
 # Ensure the `/moa` escalation preset uses Fugu Ultra (paid, on-demand) — a single
 # stronger model for "core" questions that auto-restores the default afterward. The
 # preset is a nested/list structure `hermes config set` can't express, so write it

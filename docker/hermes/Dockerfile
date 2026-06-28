@@ -48,6 +48,21 @@ RUN /home/${HERMES_USER}/.hermes/bin/uv pip install \
         --python /home/${HERMES_USER}/.hermes/hermes-agent/venv/bin/python \
         ddgs
 
+# Build the dashboard web UI into the image. The package ships source (web/), not a
+# prebuilt dist, and `hermes dashboard --skip-build` refuses to start without the
+# built UI at site-packages/hermes_cli/web_dist. The read-only runtime rootfs can't
+# build on launch, so bake it here. Needed to serve the Hermes Desktop / web client.
+# vite outputs to the SOURCE tree (hermes_cli/web_dist), but `hermes` runs from the
+# installed package in the venv site-packages — copy the built dist there so
+# `hermes dashboard --skip-build` finds it.
+RUN export PATH="/home/${HERMES_USER}/.hermes/node/bin:${PATH}" \
+    && cd /home/${HERMES_USER}/.hermes/hermes-agent \
+    && npm install --workspace web --no-audit --no-fund \
+    && npm run build -w web \
+    && rm -rf venv/lib/python3.11/site-packages/hermes_cli/web_dist \
+    && cp -r hermes_cli/web_dist venv/lib/python3.11/site-packages/hermes_cli/web_dist \
+    && rm -rf web/node_modules
+
 # NOTE: deliberately NOT setting HERMES_IGNORE_USER_CONFIG — it makes Hermes ignore
 # /data/config.yaml, and the gateway conversation loop reads its default model from
 # there (the HERMES_INFERENCE_* env only covers oneshot/-z). With it on, Telegram
