@@ -47,13 +47,35 @@ else
   echo "created item: dashboard (auto-generated password, field: password)"
 fi
 
+# 4) O'Reilly Learning session tokens -> read LIVE in-container by `op` (rotating
+#    JWT + refresh token for a scraping skill). Field labels must be EXACTLY
+#    orm-jwt / orm-rt so `op read "op://$VAULT/O'Reilly Learning Session/orm-jwt"`
+#    resolves. Concealed fields; values read from stdin, never argv/history.
+ORM_ITEM="O'Reilly Learning Session"
+if op item get "$ORM_ITEM" --vault "$VAULT" >/dev/null 2>&1; then
+  echo "item exists: $ORM_ITEM (leaving its values untouched)"
+else
+  printf "Paste the O'Reilly orm-jwt (input hidden): "; read -rs ORM_JWT; echo
+  printf "Paste the O'Reilly orm-rt  (input hidden): "; read -rs ORM_RT;  echo
+  [ -n "$ORM_JWT" ] && [ -n "$ORM_RT" ] || { echo "empty token — aborted" >&2; exit 1; }
+  op item create --category "Secure Note" --vault "$VAULT" --title "$ORM_ITEM" \
+    "orm-jwt[password]=${ORM_JWT}" "orm-rt[password]=${ORM_RT}" >/dev/null
+  unset ORM_JWT ORM_RT
+  echo "created item: $ORM_ITEM (fields: orm-jwt, orm-rt)"
+fi
+
 echo
 echo "References ready:"
-echo "  op://$VAULT/openrouter/credential   (OpenRouter key)"
-echo "  op://$VAULT/dashboard/password       (auto-generated dashboard login)"
+echo "  op://$VAULT/openrouter/credential          (OpenRouter key)"
+echo "  op://$VAULT/dashboard/password             (auto-generated dashboard login)"
+echo "  op://$VAULT/O'Reilly Learning Session/orm-jwt  (read live in-container)"
+echo "  op://$VAULT/O'Reilly Learning Session/orm-rt   (read live in-container)"
 echo
-echo "Optional — for the unattended systemd unit, create a vault-scoped service"
-echo "account token (read-only) and drop it where the unit's EnvironmentFile expects:"
-echo "  op service-account create hermes-runtime --vault '${VAULT}:read_items' --expires-in 90d"
+echo "Service Account token (REQUIRED for in-container \`op\`, read-only to '$VAULT'"
+echo "only — scope it to this single vault so a compromised skill reads nothing else."
+echo "No --expires-in => non-expiring; revoke in 1Password if it ever leaks):"
+echo "  op service-account create hermes-runtime --vault '${VAULT}:read_items'"
 echo "  mkdir -p ~/.config/hermes && chmod 600 ~/.config/hermes/op.env"
 echo "  # then write: OP_SERVICE_ACCOUNT_TOKEN=<printed token>  into ~/.config/hermes/op.env"
+echo "  # the systemd unit loads it (EnvironmentFile) and materialize passes it into"
+echo "  # the container's tmpfs env-file; the image itself stays token-free."

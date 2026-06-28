@@ -63,6 +63,29 @@ RUN export PATH="/home/${HERMES_USER}/.hermes/node/bin:${PATH}" \
     && cp -r hermes_cli/web_dist venv/lib/python3.11/site-packages/hermes_cli/web_dist \
     && rm -rf web/node_modules
 
+# --- Runtime tooling for self-authored skills (root for apt/pip) -------------
+# python3+requests+beautifulsoup4 and jq give skills an HTTP/HTML/JSON toolkit
+# (e.g. scraping O'Reilly Learning). `op` (1Password CLI) is baked so a skill can
+# read LIVE, rotating credentials from the Hermes vault at runtime — but NO token
+# is baked here: the image only carries the *binary*. The read-only,
+# Hermes-vault-scoped Service Account token arrives at runtime as process env
+# (OP_SERVICE_ACCOUNT_TOKEN, via the tmpfs env-file). This is a DELIBERATE, NARROW
+# exception to the "no op in the cage" rule: the operator's interactive `op`
+# session still never enters; only a single-vault read_items token does. Keep the
+# Hermes vault Hermes-only so the blast radius stays bounded. See docs/hermes-agent.md.
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 python3-pip jq curl gnupg ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN pip3 install --no-cache-dir --break-system-packages requests beautifulsoup4
+RUN curl -sS https://downloads.1password.com/linux/keys/1password.asc \
+        | gpg --dearmor -o /usr/share/keyrings/1password-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" \
+        > /etc/apt/sources.list.d/1password.list \
+    && apt-get update && apt-get install -y --no-install-recommends 1password-cli \
+    && rm -rf /var/lib/apt/lists/*
+USER ${HERMES_USER}
+
 # NOTE: deliberately NOT setting HERMES_IGNORE_USER_CONFIG — it makes Hermes ignore
 # /data/config.yaml, and the gateway conversation loop reads its default model from
 # there (the HERMES_INFERENCE_* env only covers oneshot/-z). With it on, Telegram

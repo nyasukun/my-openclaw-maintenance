@@ -2,9 +2,16 @@
 # HOST-SIDE secret materialization for the containerized Hermes.
 #
 # Resolves the Hermes-only 1Password vault into a tmpfs env-file that docker
-# compose loads as the container's process env. The 1Password token (your `op`
-# session) NEVER enters the container — only the resolved values do, and only for
-# Hermes' own vault. This mirrors OpenClaw's per-agent runtime-secret snapshots.
+# compose loads as the container's process env. Your INTERACTIVE `op` session
+# never enters the container — only the resolved values do, and only for Hermes'
+# own vault. This mirrors OpenClaw's per-agent runtime-secret snapshots.
+#
+# EXCEPTION (deliberate, narrow): if a read-only, Hermes-vault-scoped Service
+# Account token is set (OP_SERVICE_ACCOUNT_TOKEN), it is ALSO written into the
+# tmpfs env-file so the baked-in `op` can read LIVE credentials (e.g. rotating
+# O'Reilly session tokens) from the Hermes vault at runtime. That single-vault
+# read_items token is the only `op` credential that ever reaches the cage; keep
+# the Hermes vault Hermes-only so its blast radius stays bounded.
 #
 # Run as the same user that runs the gateway, with `op` already signed in.
 # Self-contained on purpose: it does NOT default to any repo path that could be
@@ -37,6 +44,16 @@ umask 077
 # -f: overwrite a stale tmpfs env-file without an interactive confirmation prompt
 # (systemd ExecStartPre is non-interactive; without -f `op inject` aborts).
 op inject -f -i "$TPL" -o "$OUT"
+
+# Pass a Service Account token (if present) through to the container so its baked
+# `op` is authenticated for live, read-only reads of the Hermes vault. Only the
+# token reaches the container; the operator's interactive `op` session never does.
+if [ -n "${OP_SERVICE_ACCOUNT_TOKEN:-}" ]; then
+  printf 'OP_SERVICE_ACCOUNT_TOKEN=%s\n' "$OP_SERVICE_ACCOUNT_TOKEN" >> "$OUT"
+  echo "OP_SERVICE_ACCOUNT_TOKEN=present  ->  in-container \`op\` enabled (read-only)"
+else
+  echo "OP_SERVICE_ACCOUNT_TOKEN=absent   ->  in-container \`op\` NOT authenticated (interactive op-signin path)" >&2
+fi
 
 # Redacted verification only — report presence, never the value.
 if grep -q '^OPENROUTER_API_KEY=.\+' "$OUT"; then

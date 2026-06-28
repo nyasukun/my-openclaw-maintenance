@@ -100,8 +100,11 @@ references you actually want resolved in that file.
 The host-side `op` must be authenticated when secrets are materialized:
 
 - **Managed service (unattended):** a systemd `--user` `ExecStartPre` has no
-  interactive session, so give it a **1Password Service Account token scoped to the
-  Hermes-only vault**. The token lives host-side only and never enters the container:
+  interactive session, so give it a **read-only 1Password Service Account token
+  scoped to the Hermes-only vault** (`--vault 'Hermes:read_items'`). This same
+  token is also passed into the container for live in-container reads (see
+  [In-container `op`](#in-container-op-live-credential-reads) below) — so scope it
+  to the single Hermes vault, read-only, and nothing else:
 
   ```bash
   mkdir -p ~/.config/hermes
@@ -201,6 +204,50 @@ Steps (Telegram example):
 Then message the bot. Slack/Discord follow the same pattern with their env vars
 above (Slack needs both `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN`).
 
+## In-container `op` (live credential reads)
+
+Some secrets **rotate too fast** for materialize-at-start to hold them — e.g.
+O'Reilly Learning's session JWT. For those, the image bakes the **1Password CLI**
+(`op`) plus a small HTTP/HTML toolkit (`python3` + `requests` + `beautifulsoup4`,
+and `jq`) so a self-authored skill can read a fresh value from the Hermes vault on
+demand and scrape with it:
+
+```bash
+op read "op://Hermes/O'Reilly Learning Session/orm-jwt"   # live, no restart
+op read "op://Hermes/O'Reilly Learning Session/orm-rt"
+```
+
+**This is a deliberate, narrow exception to the cage.** It needs an `op` credential
+inside the container, which the pure-cage model forbids. The exception is bounded
+three ways, and only holds if you keep all three:
+
+1. **Only a Service Account token enters — never your interactive `op` session.**
+   It rides in through the same tmpfs env-file as every other secret
+   (`materialize-hermes-secrets.sh` appends `OP_SERVICE_ACCOUNT_TOKEN` when set);
+   the image stays token-free.
+2. **Read-only, single-vault scope.** Create it with
+   `op service-account create hermes-runtime --vault 'Hermes:read_items'`. Inside
+   the container `op vault list` then shows **only** the Hermes vault — that empty
+   result for any other vault *is* the scope proof.
+3. **The Hermes vault stays Hermes-only.** The token can read every item in it, so
+   it must never hold an ★1 Azabu / ★2 foxcale or OpenClaw credential (constraint 1).
+
+Provision the O'Reilly item with `provision-1password.sh` (prompts for the two
+tokens, hidden). The field labels must be **exactly** `orm-jwt` / `orm-rt` or the
+`op://` references above won't resolve. The `orm-jwt`/`orm-rt` cookies are
+**HttpOnly** (page JS can't read them), so grab the values by hand: logged in to
+learning.oreilly.com, open DevTools → Application → Cookies →
+`https://learning.oreilly.com` and copy the Value of each row.
+
+**Verify** (rebuilt image + token injected; runs as the non-root `hermes` user and
+must exit 0):
+
+```bash
+docker compose exec -T hermes bash -lc \
+  'python3 -c "import requests, bs4" && jq --version && op --version && echo deps-ok'
+docker compose exec -T hermes op vault list   # only "Hermes" — no other vault is visible
+```
+
 ## Web search
 
 The interactive/gateway model is `openrouter/owl-alpha:online`. The `:online`
@@ -267,10 +314,14 @@ Hermes runs with **full autonomy inside the sandbox**: `HERMES_YOLO_MODE=1` and
 `HERMES_ACCEPT_HOOKS=1` (compose) make the gateway agent bypass dangerous-command
 approval and auto-accept shell hooks — it executes tools and self-authors skills
 without prompting. This is deliberate: **the container is the cage.** Read-only
-rootfs, `cap_drop: ALL`, no host/OpenClaw reach, and the 1Password token never
-enters the container, so the blast radius is the container + `/data` + outbound
-network. (Egress is currently open — restrict it at the compose/iptables layer if
-you ever want to bound that too.)
+rootfs, `cap_drop: ALL`, no host/OpenClaw reach, and only a **read-only,
+single-vault Service Account token** (never your interactive `op` session) reaches
+it — so the blast radius is the container + `/data` + outbound network + read-only
+access to the Hermes vault's items. (Egress is currently open — restrict it at the
+compose/iptables layer if you ever want to bound that too.) The one expansion vs.
+the pure cage is in-container `op` (below): it widens the secret reach from "the
+values in `hermes.env.tpl`" to "every item in the Hermes vault, read-only," which
+is why that vault must stay Hermes-only.
 
 Because the rootfs is read-only, Hermes **cannot evolve its own image** — new
 packages/tools only persist if baked into the Dockerfile. So capability growth is a

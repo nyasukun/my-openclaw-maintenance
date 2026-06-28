@@ -2,8 +2,11 @@
 
 The managed deployment for [Hermes Agent](https://hermes-agent.org/): a hardened
 container run in parallel with the OpenClaw gateway, with secrets supplied by
-**host-side 1Password** — no `op` token and no secret value ever enters the
-container. This is the one supported shape on this host (bare `~/.hermes` install is
+**host-side 1Password** — your interactive `op` session never enters the container.
+(One narrow, opt-in exception: a read-only, Hermes-vault-scoped Service Account
+token is passed in so a skill can read live, rotating credentials — see *In-container
+`op`* in [`../../docs/hermes-agent.md`](../../docs/hermes-agent.md).) This is the one
+supported shape on this host (bare `~/.hermes` install is
 a throwaway-experiment escape hatch only). Background and the hard coexistence
 constraints: [`../../docs/hermes-agent.md`](../../docs/hermes-agent.md).
 
@@ -11,7 +14,7 @@ constraints: [`../../docs/hermes-agent.md`](../../docs/hermes-agent.md).
 
 | File | Role |
 |---|---|
-| `Dockerfile` | bakes the Hermes install (code/venv) into `hermes:local`; **no secrets baked** |
+| `Dockerfile` | bakes the Hermes install (code/venv) + a skill toolkit (`op`, `python3`+`requests`+`beautifulsoup4`, `jq`) into `hermes:local`; **no secrets baked** (the `op` token arrives at runtime) |
 | `hermes-entrypoint.sh` | asserts `OPENROUTER_API_KEY` is present (redacted), then `exec`s Hermes |
 | `hermes.env.tpl` | **`op://` references only** (safe to commit); the resolved file is tmpfs-only |
 | `provision-1password.sh` | create the Hermes-only vault + OpenRouter key item from a signed-in `op` session |
@@ -45,11 +48,15 @@ systemctl --user enable --now hermes.service` (materializes secrets on every sta
 
 ## Why host-side 1Password
 
-The `op` session stays on the host; the container receives only the resolved
-values for its own vault, as process env. A compromised self-generated Hermes skill
-therefore cannot pivot to a 1Password token or read beyond what Hermes already
-needs — the same least-privilege boundary OpenClaw enforces with per-agent
-runtime-secret snapshots.
+Your **interactive** `op` session stays on the host; the container receives only
+the resolved values for its own vault, as process env — the same least-privilege
+boundary OpenClaw enforces with per-agent runtime-secret snapshots. The lone
+exception is the opt-in in-container `op`: a **read-only, Hermes-vault-scoped**
+Service Account token is passed in so a skill can read live, rotating credentials
+(e.g. O'Reilly session tokens). That token can read every item in the Hermes vault
+but **nothing outside it** (`op vault list` inside the container shows only
+`Hermes`), which is why the vault stays Hermes-only. A compromised skill still
+cannot reach your `op` session, the host, OpenClaw, or any other vault.
 
 ## Persistence — keep the `hermes-data` volume
 

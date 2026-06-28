@@ -23,6 +23,7 @@ x-hermes-common: &hermes-common
   tmpfs:
     - /tmp
     - /home/hermes/.cache         # uv/python scratch under XDG_CACHE_HOME
+    - /home/hermes/.config        # writable config dir for in-container `op` (rootfs is ro)
 
 # Shared non-secret behaviour env. Secrets stay in the env-file, not here.
 x-hermes-env: &hermes-env
