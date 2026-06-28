@@ -40,6 +40,14 @@ RUN /home/${HERMES_USER}/.hermes/bin/uv pip install \
         --python /home/${HERMES_USER}/.hermes/hermes-agent/venv/bin/python \
         "hermes-agent[messaging] @ /home/${HERMES_USER}/.hermes/hermes-agent"
 
+# Keyless web search: the bundled `ddgs` (DuckDuckGo) provider needs the `ddgs`
+# package, which the base install omits. Without it `web_search` returns "ddgs
+# package is not installed" and the agent silently falls back to local search only.
+# (exa/tavily/firecrawl/brave-free all require API keys; ddgs is the no-key path.)
+RUN /home/${HERMES_USER}/.hermes/bin/uv pip install \
+        --python /home/${HERMES_USER}/.hermes/hermes-agent/venv/bin/python \
+        ddgs
+
 # NOTE: deliberately NOT setting HERMES_IGNORE_USER_CONFIG — it makes Hermes ignore
 # /data/config.yaml, and the gateway conversation loop reads its default model from
 # there (the HERMES_INFERENCE_* env only covers oneshot/-z). With it on, Telegram

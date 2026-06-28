@@ -16,6 +16,12 @@ if [ -n "${HERMES_INFERENCE_MODEL:-}" ]; then
   hermes config set model.default "${HERMES_INFERENCE_MODEL}" >/dev/null 2>&1 || true
 fi
 
+# Default web search to the keyless ddgs (DuckDuckGo) backend so `web_search` works
+# out of the box (exa/tavily/firecrawl/brave-free need API keys). The `ddgs` package
+# is baked into the image; here we just point the config at it.
+hermes config set web.search_backend ddgs >/dev/null 2>&1 || true
+hermes config set web.backend ddgs >/dev/null 2>&1 || true
+
 # Ensure the `/moa` escalation preset uses Fugu Ultra (paid, on-demand) — a single
 # stronger model for "core" questions that auto-restores the default afterward. The
 # preset is a nested/list structure `hermes config set` can't express, so write it
