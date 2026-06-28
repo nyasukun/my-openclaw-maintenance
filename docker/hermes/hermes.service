@@ -26,8 +26,10 @@ Environment=HERMES_SECRETS_ENV=%t/hermes-secrets/hermes.env
 EnvironmentFile=-%h/.config/hermes/op.env
 # Self-contained materialize — no removable default paths (cf. vault-map landmine).
 ExecStartPre=%h/work/my-openclaw-maintenance/docker/hermes/materialize-hermes-secrets.sh
-ExecStart=/usr/bin/docker compose up
-ExecStop=/usr/bin/docker compose down
+# `--profile dashboard` also starts the opt-in remote gateway (Hermes Desktop) when
+# HERMES_DASHBOARD_PASSWORD is provisioned; harmless if you don't use it.
+ExecStart=/usr/bin/docker compose --profile dashboard up
+ExecStop=/usr/bin/docker compose --profile dashboard down
 Restart=on-failure
 RestartSec=5
 

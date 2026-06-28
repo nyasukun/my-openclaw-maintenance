@@ -16,3 +16,4 @@
 
 OPENROUTER_API_KEY=op://Hermes/openrouter/credential
 TELEGRAM_BOT_TOKEN=op://Hermes/telegram-hermes/token
+HERMES_DASHBOARD_PASSWORD=op://Hermes/dashboard/password
