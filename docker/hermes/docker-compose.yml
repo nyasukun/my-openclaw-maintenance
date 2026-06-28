@@ -40,7 +40,11 @@ services:
       # code paths: HERMES_INFERENCE_* (oneshot/-z + inference), HERMES_MODEL (cron),
       # HERMES_TUI_PROVIDER (chat). Verified end-to-end with `hermes -z`.
       HERMES_INFERENCE_PROVIDER: ${HERMES_INFERENCE_PROVIDER:-openrouter}
-      HERMES_INFERENCE_MODEL: ${HERMES_INFERENCE_MODEL:-openrouter/owl-alpha}
+      # `:online` enables OpenRouter's server-side web search (Exa: search + page
+      # read) for the interactive/gateway model — the model searches only when it
+      # needs to (~$0.005/search). This is the primary web capability; ddgs stays as
+      # a free local-tool fallback. Cron stays on plain owl-alpha (no search cost).
+      HERMES_INFERENCE_MODEL: ${HERMES_INFERENCE_MODEL:-openrouter/owl-alpha:online}
       HERMES_MODEL: ${HERMES_MODEL:-openrouter/owl-alpha}
       HERMES_TUI_PROVIDER: ${HERMES_TUI_PROVIDER:-openrouter}
       # Messaging gateway allowlists (non-secret user-id CSVs). The bot TOKENS go in
