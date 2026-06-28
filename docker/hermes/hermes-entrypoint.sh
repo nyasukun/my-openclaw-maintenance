@@ -63,6 +63,28 @@ moa.setdefault("default_preset", "fugu")
 yaml.safe_dump(c, open(p, "w"), sort_keys=False)
 PY
 
-echo "hermes-entrypoint: OPENROUTER_API_KEY=present HERMES_HOME=${HERMES_HOME:-/data} model=${HERMES_INFERENCE_MODEL:-<config-default>} moa=fugu"
+# Smartphone-safe PDF font. The oreilly-learning `build_pdf.py` skill embeds the
+# font at /data/fonts/NotoSansCJKjp-{Regular,Bold}.otf into report PDFs. Noto Sans
+# CJK is CFF/PostScript-outline → embeds as Type0/CIDFontType0(CFF), which Telegram's
+# MOBILE viewer cannot render (Japanese garbles, though desktop + server raster are
+# fine). The baked IPAexGothic is TrueType → embeds as CIDFontType2(TTF) → renders on
+# phone AND PC, vector + searchable, no rasterization. Seed/repair those paths: replace
+# a CFF ('OTTO' magic) or missing file with IPAex (backing the CFF up once); idempotent
+# — a TrueType file is left untouched, so a later hand-placed TTF font is preserved.
+IPAEX="/usr/share/fonts/opentype/ipaexfont-gothic/ipaexg.ttf"
+if [ -f "$IPAEX" ]; then
+  mkdir -p /data/fonts
+  for f in NotoSansCJKjp-Regular.otf NotoSansCJKjp-Bold.otf; do
+    dst="/data/fonts/$f"
+    if [ -f "$dst" ] && [ "$(head -c4 "$dst" 2>/dev/null)" = "OTTO" ]; then
+      [ -f "/data/fonts/.cff-backup/$f" ] || { mkdir -p /data/fonts/.cff-backup; cp -f "$dst" "/data/fonts/.cff-backup/$f"; }
+      cp -f "$IPAEX" "$dst"
+    elif [ ! -f "$dst" ]; then
+      cp -f "$IPAEX" "$dst"
+    fi
+  done
+fi
+
+echo "hermes-entrypoint: OPENROUTER_API_KEY=present HERMES_HOME=${HERMES_HOME:-/data} model=${HERMES_INFERENCE_MODEL:-<config-default>} moa=fugu pdf_font=ipaex-ttf"
 
 exec "$@"
