@@ -21,6 +21,9 @@ services:
     environment:
       HERMES_HOME: /data
       HERMES_IGNORE_USER_CONFIG: "1"
+      # Redirect the XDG state dir (gateway locks etc.) onto the writable /data
+      # volume — the image rootfs is read-only, so ~/.local/state can't be written.
+      XDG_STATE_HOME: /data/state
       # Non-secret behaviour settings (kept out of the secret env-file on purpose).
       # Default to Owl Alpha (free, agentic, 1M+ ctx, tool use) on OpenRouter.
       # `hermes model` is interactive-only, so we pin the default via env across all
@@ -33,7 +36,7 @@ services:
       # Messaging gateway allowlists (non-secret user-id CSVs). The bot TOKENS go in
       # hermes.env.tpl (1Password), NOT here. Without an allowlist all users are
       # denied. See "Messaging gateway" in docs/hermes-agent.md.
-      # TELEGRAM_ALLOWED_USERS: "123456789"
+      TELEGRAM_ALLOWED_USERS: "5089072082"
       # SLACK_ALLOWED_USERS: "U0123456789"
       # DISCORD_ALLOWED_USERS: "123456789012345678"
 

@@ -34,6 +34,14 @@ WORKDIR /home/${HERMES_USER}
 RUN curl -fsSL https://hermes-agent.nousresearch.com/install.sh \
     | bash -s -- --skip-setup --skip-browser --non-interactive
 
+# The installer ships only the core package; the messaging-platform adapters
+# (Telegram/Slack/Discord) live in the `messaging` extra. Install it into the
+# uv-managed venv so `hermes gateway` can create platform adapters — without it a
+# configured TELEGRAM_BOT_TOKEN logs "requirements not met" and the bot stays silent.
+RUN /home/${HERMES_USER}/.hermes/bin/uv pip install \
+        --python /home/${HERMES_USER}/.hermes/hermes-agent/venv/bin/python \
+        "hermes-agent[messaging] @ /home/${HERMES_USER}/.hermes/hermes-agent"
+
 ENV PATH="/home/${HERMES_USER}/.local/bin:${PATH}" \
     HERMES_HOME=/data \
     HERMES_IGNORE_USER_CONFIG=1 \
