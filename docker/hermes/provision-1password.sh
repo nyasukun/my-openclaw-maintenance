@@ -37,8 +37,20 @@ else
   echo "created item: openrouter (field: credential)"
 fi
 
+# 3) Dashboard (remote desktop gateway) password — AUTO-GENERATED, stored only in
+#    1Password. You never type it; copy it from 1Password when logging into Desktop.
+if op item get dashboard --vault "$VAULT" >/dev/null 2>&1; then
+  echo "item exists: dashboard (leaving its password untouched)"
+else
+  op item create --category password --vault "$VAULT" --title dashboard \
+    --generate-password='letters,digits,symbols,32' >/dev/null
+  echo "created item: dashboard (auto-generated password, field: password)"
+fi
+
 echo
-echo "Reference ready: op://$VAULT/openrouter/credential"
+echo "References ready:"
+echo "  op://$VAULT/openrouter/credential   (OpenRouter key)"
+echo "  op://$VAULT/dashboard/password       (auto-generated dashboard login)"
 echo
 echo "Optional — for the unattended systemd unit, create a vault-scoped service"
 echo "account token (read-only) and drop it where the unit's EnvironmentFile expects:"

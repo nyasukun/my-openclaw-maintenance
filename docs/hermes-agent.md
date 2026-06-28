@@ -312,9 +312,11 @@ The dashboard exposes config/API-keys/sessions/agent control, so it is **tailnet
 
 Setup:
 
-1. Create the dashboard password in the Hermes vault (item `dashboard`, field
-   `password`), then add `HERMES_DASHBOARD_PASSWORD=op://Hermes/dashboard/password`
-   to `hermes.env.tpl` (only after the item exists), materialize.
+1. Run `provision-1password.sh` — it **auto-generates** the dashboard password into
+   the Hermes vault (item `dashboard`, field `password`); you never type one. Then add
+   `HERMES_DASHBOARD_PASSWORD=op://Hermes/dashboard/password` to `hermes.env.tpl`
+   (only after the item exists) and materialize. Copy the password from 1Password for
+   the Desktop login.
 2. Start it: `docker compose --profile dashboard up -d hermes-dashboard`.
 3. Expose over Tailscale (host): `tailscale serve --bg --https 443 127.0.0.1:9119`
    → `https://<host>.<tailnet>.ts.net`.
