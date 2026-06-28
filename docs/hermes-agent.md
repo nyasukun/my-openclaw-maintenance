@@ -201,23 +201,73 @@ Steps (Telegram example):
 Then message the bot. Slack/Discord follow the same pattern with their env vars
 above (Slack needs both `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN`).
 
+## Persistence, memory & growth
+
+Hermes is "self-improving": it accumulates **persistent memory** and **agent-generated
+skills** over time. On this host all of that lives under `HERMES_HOME=/data`, which is
+the **`hermes-data` named volume** — `memories/`, `state.db`, `sessions/`, `skills/`
+(incl. the curator's `.curator_state`), `cron/`, `hooks/`. Only `/tmp` and
+`XDG_CACHE_HOME` (tmpfs) are ephemeral, and those are pure caches.
+
+So growth **survives container restarts and image upgrades** (`docker compose
+build/up` never touches the volume). It does **not** survive deleting the volume.
+**Operating rule: keep `hermes-data`.** Never `docker volume rm` it without a backup,
+and back it up regularly:
+
+```bash
+docker/hermes/backup-hermes-data.sh           # -> ~/hermes-backups/hermes-data-<ts>.tgz
+```
+
+Memory is the **built-in** provider (persisted in `/data`); for richer long-term
+recall you can later configure an external memory provider, but it is optional.
+
+## Model strategy: cheap default, escalate hard questions
+
+Hermes has **no automatic difficulty-based routing** — the main model answers every
+message, and background growth tasks use it too. The default here is **Owl Alpha**
+(`openrouter/owl-alpha`, free), pinned via the entrypoint. To get a stronger model on
+the *core* questions, escalate **manually** per conversation, in the chat itself:
+
+```text
+/model sakana/fugu-ultra --provider openrouter --session   # this thread -> Fugu Ultra
+…ask the hard question(s)…
+/model openrouter/owl-alpha --provider openrouter          # back to the free default
+```
+
+`sakana/fugu-ultra` (Sakana AI) is itself a quality-first multi-step orchestrator —
+but it is **paid** (~$5/$30 per M tokens), so escalate deliberately. `--session`
+scopes the switch to that conversation. Alternatively configure a one-model `/moa`
+preset (`hermes moa configure`) pointing at `sakana/fugu-ultra` and use
+`/moa <question>` for a single turn that **auto-restores** the default afterward.
+
 ## Maintain
+
+Upgrades keep the `hermes-data` volume (memory + learned skills persist):
 
 ```bash
 cd docker/hermes
-docker compose build --pull            # upgrade Hermes (rebuild the image)
-docker compose up -d                   # restart onto the new image
+docker compose build --pull            # rebuild the image (volume untouched)
+docker compose up -d                   # or: systemctl --user restart hermes.service
 ```
 
 `docker compose exec hermes hermes doctor` diagnoses configuration from inside.
 
 ## Rollback / uninstall
 
+Stop and remove the **container/image** — this **keeps** all state (memory, skills):
+
 ```bash
 systemctl --user disable --now hermes.service   # if installed
-cd docker/hermes && docker compose down
-docker volume rm hermes_hermes-data             # destroys Hermes state — be sure
-docker image rm hermes:local
+cd docker/hermes && docker compose down         # keeps the hermes-data volume
+docker image rm hermes:local                    # optional
+```
+
+Destroying state is a **separate, deliberate** step — it **erases Hermes' memory and
+all learned skills**. Back up first, and only then:
+
+```bash
+docker/hermes/backup-hermes-data.sh             # snapshot before destroying
+docker volume rm hermes_hermes-data             # ⚠ wipes memory + learned skills
 ```
 
 OpenClaw is untouched by any of this; Hermes is confined to its image, the

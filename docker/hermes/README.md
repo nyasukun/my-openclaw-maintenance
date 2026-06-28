@@ -18,6 +18,7 @@ constraints: [`../../docs/hermes-agent.md`](../../docs/hermes-agent.md).
 | `materialize-hermes-secrets.sh` | host-side `op inject` → tmpfs env-file (refuses non-tmpfs) |
 | `docker-compose.yml` | volume for `/data` state, `env_file` for secrets, rootfs/cap/pids/mem hardening |
 | `hermes.service` | user systemd unit; `ExecStartPre` materializes secrets into `%t` (tmpfs) |
+| `backup-hermes-data.sh` | snapshot the `hermes-data` volume (memory + learned skills) to a tgz |
 
 ## One-time setup
 
@@ -49,9 +50,10 @@ therefore cannot pivot to a 1Password token or read beyond what Hermes already
 needs — the same least-privilege boundary OpenClaw enforces with per-agent
 runtime-secret snapshots.
 
-## Not yet verified on this host
+## Persistence — keep the `hermes-data` volume
 
-The image build runs the upstream installer non-interactively; first-run behaviour
-(env-only config via `HERMES_IGNORE_USER_CONFIG`) hasn't been exercised here.
-Validate with `docker compose build` then a CLI smoke test before enabling the
-service.
+Hermes' persistent memory and agent-generated skills live in the `hermes-data`
+volume (`/data`). It survives restarts and image upgrades but **not** `docker volume
+rm`. Keep it, and back it up with `./backup-hermes-data.sh`. Full notes
+("Persistence, memory & growth" and the cheap-default / escalate-to-Fugu model
+strategy) are in [`../../docs/hermes-agent.md`](../../docs/hermes-agent.md).
