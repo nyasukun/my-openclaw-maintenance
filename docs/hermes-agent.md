@@ -204,6 +204,33 @@ Steps (Telegram example):
 Then message the bot. Slack/Discord follow the same pattern with their env vars
 above (Slack needs both `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN`).
 
+### Voice messages (speech-to-text)
+
+Telegram **voice notes** route through `tools/transcription_tools.py`, which
+transcribes them to text before the agent ever sees them. The default
+`stt.provider: local` uses **faster-whisper** running in-process — but the base
+install ships neither the wheel nor a model, so an un-provisioned gateway just logs
+`STT provider 'local' configured but unavailable` and drops every voice message.
+
+The image fixes this the same way it does the PDF toolchain — **bake it in** rather
+than download at runtime (read-only rootfs + non-writable cache make a first-use
+Hub fetch impossible):
+
+- The Dockerfile installs `faster-whisper` (ctranslate2 CPU/int8 backend — no
+  torch, no CUDA) and vendors a **pre-converted `small` model** at
+  `$HERMES_WHISPER_MODEL_DIR`. `small` is the accuracy/size sweet spot for Japanese
+  voice (`base` mis-transcribes JA; `medium` is CPU-slow). `ffmpeg` (decodes
+  Telegram's OGG/Opus) is already in the base image.
+- The entrypoint pins `stt.local.model` to that baked directory so faster-whisper
+  loads from disk and **never attempts a download**. `stt.provider`/`stt.enabled`
+  use `setdefault`, so a deliberate switch to a cloud STT provider (openai / groq /
+  xai / mistral / elevenlabs — each needs its own key, and is a *new* upstream
+  outside the single OpenRouter contract) survives a restart.
+
+Language is left to whisper's auto-detect (handles mixed JA/EN); pin one with
+`stt.local.language` in `/data/config.yaml` if needed. The startup banner shows
+`stt=local:faster-whisper-small` when provisioned.
+
 ## In-container `op` (live credential reads)
 
 Some secrets **rotate too fast** for materialize-at-start to hold them — e.g.
@@ -304,9 +331,9 @@ the *core* questions, escalate **manually** per conversation, in the chat itself
 `sakana/fugu-ultra` (Sakana AI) is itself a quality-first multi-step orchestrator —
 but it is **paid** (~$5/$30 per M tokens), so escalate deliberately. `--session`
 scopes the switch to that conversation. The entrypoint also preconfigures a `/moa`
-preset (`fugu`) pointing at `sakana/fugu-ultra`, so **`/moa <question>`** runs a
-single turn through Fugu Ultra and **auto-restores** the default afterward — no
-`/model` toggle needed.
+preset (`glm`) pointing at `z-ai/glm-5.2` (Z.ai, paid ~$0.95/$3 per M tokens), so
+**`/moa <question>`** runs a single turn through GLM 5.2 and **auto-restores** the
+default afterward — no `/model` toggle needed.
 
 ## Autonomy & external productivity audit
 

@@ -42,7 +42,7 @@ yaml.safe_dump(c, open(p, "w"), sort_keys=False)
 PY
 fi
 
-# Ensure the `/moa` escalation preset uses Fugu Ultra (paid, on-demand) — a single
+# Ensure the `/moa` escalation preset uses GLM 5.2 (paid, on-demand) — a single
 # stronger model for "core" questions that auto-restores the default afterward. The
 # preset is a nested/list structure `hermes config set` can't express, so write it
 # with PyYAML. Non-clobbering (setdefault): only adds the preset/default if absent,
@@ -55,11 +55,38 @@ try:
 except FileNotFoundError:
     c = {}
 moa = c.setdefault("moa", {})
-moa.setdefault("presets", {}).setdefault("fugu", {
-    "reference_models": [{"provider": "openrouter", "model": "sakana/fugu-ultra"}],
-    "aggregator": {"provider": "openrouter", "model": "sakana/fugu-ultra"},
+moa.setdefault("presets", {}).setdefault("glm", {
+    "reference_models": [{"provider": "openrouter", "model": "z-ai/glm-5.2"}],
+    "aggregator": {"provider": "openrouter", "model": "z-ai/glm-5.2"},
 })
-moa.setdefault("default_preset", "fugu")
+moa.setdefault("default_preset", "glm")
+yaml.safe_dump(c, open(p, "w"), sort_keys=False)
+PY
+
+# Point local speech-to-text at the baked faster-whisper model so Telegram voice
+# notes transcribe with ZERO runtime download. The image vendors a converted `small`
+# model at $HERMES_WHISPER_MODEL_DIR (see Dockerfile); WhisperModel() loads a
+# directory path verbatim, so we pin stt.local.model to it. Without this, an unset
+# model defaults to the bare name "base", which faster-whisper tries to fetch from
+# the Hub into a read-only cache → fails on every voice message. Non-clobbering
+# (setdefault) for provider/enabled so a deliberate cloud-STT switch survives; but
+# the model path is FORCED to the baked dir whenever it's unset or a bare size name
+# (a bare name would trigger the doomed download).
+"$HOME/.hermes/hermes-agent/venv/bin/python" - <<PY 2>/dev/null || true
+import yaml
+p = "/data/config.yaml"
+model_dir = "${HERMES_WHISPER_MODEL_DIR:-/home/hermes/.hermes/whisper-models/faster-whisper-small}"
+try:
+    c = yaml.safe_load(open(p)) or {}
+except FileNotFoundError:
+    c = {}
+stt = c.setdefault("stt", {})
+stt.setdefault("enabled", True)
+stt.setdefault("provider", "local")
+local = stt.setdefault("local", {})
+# Force the baked path unless the operator pinned a real local directory of their own.
+if local.get("model", "") in ("", "tiny", "base", "small", "medium", "large", "large-v2", "large-v3"):
+    local["model"] = model_dir
 yaml.safe_dump(c, open(p, "w"), sort_keys=False)
 PY
 
@@ -85,6 +112,6 @@ if [ -f "$IPAEX" ]; then
   done
 fi
 
-echo "hermes-entrypoint: OPENROUTER_API_KEY=present HERMES_HOME=${HERMES_HOME:-/data} model=${HERMES_INFERENCE_MODEL:-<config-default>} moa=fugu pdf_font=ipaex-ttf"
+echo "hermes-entrypoint: OPENROUTER_API_KEY=present HERMES_HOME=${HERMES_HOME:-/data} model=${HERMES_INFERENCE_MODEL:-<config-default>} moa=glm stt=local:faster-whisper-small pdf_font=ipaex-ttf"
 
 exec "$@"

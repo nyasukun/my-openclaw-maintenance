@@ -60,6 +60,33 @@ RUN /home/${HERMES_USER}/.hermes/bin/uv pip install \
         --python /home/${HERMES_USER}/.hermes/hermes-agent/venv/bin/python \
         fpdf2 pymupdf pypdf fonttools defusedxml
 
+# Voice-message speech-to-text. Telegram voice notes route through
+# tools/transcription_tools.py, whose default `stt.provider: local` uses
+# faster-whisper — but the base install ships neither faster-whisper nor a model,
+# so the gateway logs "STT provider 'local' configured but unavailable" and voice
+# messages are silently dropped. Bake the wheel (ctranslate2 backend, CPU int8 — no
+# torch, no CUDA) AND a pre-converted `small` model into the image: the read-only
+# rootfs can't download the model on first use (faster-whisper would fetch it from
+# the Hub into a non-writable cache), so vendoring it makes STT a property of the
+# IMAGE, not of /data state or network. `small` (~480 MB) is the accuracy/size
+# sweet spot for Japanese voice (base mis-transcribes JA; medium is CPU-slow). ffmpeg
+# (decodes Telegram's OGG/Opus) is already installed above. The entrypoint points
+# `stt.local.model` at this baked dir so no download is ever attempted at runtime.
+ENV HERMES_WHISPER_MODEL_DIR=/home/${HERMES_USER}/.hermes/whisper-models/faster-whisper-small
+RUN /home/${HERMES_USER}/.hermes/bin/uv pip install \
+        --python /home/${HERMES_USER}/.hermes/hermes-agent/venv/bin/python \
+        faster-whisper \
+    && /home/${HERMES_USER}/.hermes/hermes-agent/venv/bin/python - <<'PY'
+import os
+from huggingface_hub import snapshot_download
+dest = os.environ["HERMES_WHISPER_MODEL_DIR"]
+# Systran/faster-whisper-small is the CT2-converted `small` model (model.bin +
+# config.json + tokenizer.json + vocabulary) WhisperModel() loads straight from a
+# local directory path — no name->Hub resolution, so no runtime download.
+snapshot_download(repo_id="Systran/faster-whisper-small", local_dir=dest)
+print("baked faster-whisper small model ->", dest)
+PY
+
 # Build the dashboard web UI into the image. The package ships source (web/), not a
 # prebuilt dist, and `hermes dashboard --skip-build` refuses to start without the
 # built UI at site-packages/hermes_cli/web_dist. The read-only runtime rootfs can't

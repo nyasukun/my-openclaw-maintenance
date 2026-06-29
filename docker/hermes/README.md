@@ -63,5 +63,5 @@ cannot reach your `op` session, the host, OpenClaw, or any other vault.
 Hermes' persistent memory and agent-generated skills live in the `hermes-data`
 volume (`/data`). It survives restarts and image upgrades but **not** `docker volume
 rm`. Keep it, and back it up with `./backup-hermes-data.sh`. Full notes
-("Persistence, memory & growth" and the cheap-default / escalate-to-Fugu model
+("Persistence, memory & growth" and the cheap-default / escalate-to-GLM model
 strategy) are in [`../../docs/hermes-agent.md`](../../docs/hermes-agent.md).
