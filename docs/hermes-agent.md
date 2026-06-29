@@ -335,6 +335,67 @@ preset (`glm`) pointing at `z-ai/glm-5.2` (Z.ai, paid ~$0.95/$3 per M tokens), s
 **`/moa <question>`** runs a single turn through GLM 5.2 and **auto-restores** the
 default afterward — no `/model` toggle needed.
 
+## Cron jobs — guardrails & troubleshooting
+
+Hermes' built-in scheduler (`hermes cron …`, jobs in `/data/cron/jobs.json`) has
+**two fail-closed guards** that can start blocking a job that ran fine yesterday —
+**with no change to the job itself**. Both are deliberate; the fix is config, not a
+code patch (the runner lives in the read-only image and is lost on rebuild).
+
+1. **Prompt threat-pattern scan.** At each run the job's prompt **plus its attached
+   skill bodies** are assembled and regex-scanned (`tools/cronjob_tools.py`). Benign
+   skill prose can trip it — the `deception_hide` tripwire is literally
+   `do\s+not\s+tell\s+the\s+user`, so a QA line like *"Do not tell the user 'fixed'
+   until the check passed"* in a skill hard-blocks the whole job with:
+
+   > `Blocked: prompt matches threat pattern 'deception_hide'. Cron prompts must not
+   > contain injection or exfiltration payloads.`
+
+   Fix = **reword the offending skill** (e.g. "Do not *report* 'fixed' back to the
+   user…"). Hermes skills live **only on the `/data` volume**
+   (`/data/skills/<cat>/<skill>/SKILL.md`), not in this repo. Verify a fix without a
+   paid run by calling the real scanners in the venv:
+
+   ```bash
+   docker compose exec -T hermes /home/hermes/.hermes/hermes-agent/venv/bin/python -c \
+     "from tools.cronjob_tools import _scan_cron_prompt, _scan_cron_skill_assembled; \
+      print(_scan_cron_prompt(open('/path/to/prompt').read()) or 'OK')"
+   ```
+
+2. **Unpinned model-drift guard (#44585).** An **unpinned** job (`model`/`provider`
+   null in `jobs.json`) snapshots the global default at creation time. If you later
+   change the default (`hermes model`, or a new image default — e.g.
+   `openrouter/fusion` → `openrouter/owl-alpha:online`), the next run **fails closed**
+   and makes **no inference call**:
+
+   > `Skipped to prevent unintended spend: global inference config drifted since this
+   > job was created (…), and this job is unpinned.`
+
+   Fix = **pin the job explicitly**. The CLI `hermes cron edit` has **no model flag**
+   — pin by setting `provider` + `model` on the job in `/data/cron/jobs.json` (the
+   runner reads `job["model"]`/`job["provider"]` directly; the guard skips any axis
+   that is non-null), or use the `cronjob action=update` agent tool. Use the OpenRouter
+   slug, e.g. `provider=openrouter`, `model=z-ai/glm-5.2` (the `/moa` GLM model). After
+   editing `jobs.json`, `systemctl --user restart hermes` so the embedded scheduler
+   reloads it.
+
+**Operational gotchas**
+
+- `last_error` / `last_status` in `jobs.json` are the **last-run record**; they only
+  clear on the next *successful* run, so a job can read `error` even after the cause
+  is fixed. Confirm a fix by triggering a run (or wait for the schedule), not by the
+  stale field.
+- `hermes cron run <id>` does a **full, real run** — paid inference **and** delivery
+  (e.g. a PDF posted to Telegram). A run that dies at a guard makes **no** paid call;
+  one that passes will spend and deliver. Don't use it as a dry-run.
+- A live run holds a `fire_claim` in `jobs.json`, and the agent executes **as a thread
+  inside the gateway process** — it will **not** show up in `ps`. Before assuming a
+  claim is stale (e.g. after a restart), check `/data/logs/agent.log` for an active
+  `cron_<id>_<ts>` session; clearing a *live* claim would double-run the job.
+- **Skill prose must name exact APIs.** A skill that said only "PyMuPDF `rawdict`
+  glyph check" led the model to invent the non-existent `page.get_rawdict()`; spell
+  out `page.get_text("rawdict")`. Vague capability names invite hallucinated calls.
+
 ## Autonomy & external productivity audit
 
 Hermes runs with **full autonomy inside the sandbox**: `HERMES_YOLO_MODE=1` and
